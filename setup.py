@@ -34,7 +34,7 @@ setup(
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     packages=find_packages(exclude=['tests']),
-    url='https://github.com/jrober84/cladeomatic',
+    url='https://github.com/phac-nml/cladeomaticc',
     license='GPLv3',
     author='James Robertson',
     author_email='james.robertson@phac-aspc.gc.ca',
