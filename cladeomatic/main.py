@@ -6,7 +6,6 @@ tasks = {
     'create': 'Identify population structure and develop typing scheme',
     'benchmark': 'Test developed scheme using labeled samples and scheme',
     'test': 'Test cladeomatic functionality on a small dataset',
-    'version': 'Print version and exit',
 }
 
 ordered_tasks = [

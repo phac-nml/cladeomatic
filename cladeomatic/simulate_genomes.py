@@ -112,17 +112,23 @@ def main():
     input_fasta = '/Users/jrobertson/Desktop/2022-09-Simulation/thrA.fas'
     output_fasta = '/Users/jrobertson/Desktop/2022-09-Simulation/thrA.simulation.fas'
     num_generations = 10
-
+    inclusion_prob = 0.5
     num_mutations = 1
 
 
     fasta_seq = read_fasta_dict(input_fasta)
     ref_id = list(fasta_seq.keys())[0]
     ref_seq = fasta_seq[ref_id]
-    ref_len = len(ref_seq)
 
 
     sim_samples = simulate(ref_seq,num_mutations,num_generations)
+    for i in range(0, len(sim_samples)):
+        state = False
+        num = random.uniform(0, 1)
+        if num > inclusion_prob:
+            state = True
+        sim_samples[i]['is_alive'] = state
+
     create_seqs(sim_samples, ref_id,ref_seq, output_fasta)
 
 

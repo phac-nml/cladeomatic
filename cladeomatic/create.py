@@ -42,7 +42,8 @@ def parse_args():
         formatter_class=CustomFormatter)
     parser.add_argument('--in_var', type=str, required=True,
                         help='Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)')
-    parser.add_argument('--in_nwk', type=str, required=True, help='Newick Tree of strains')
+    parser.add_argument('--in_nwk', type=str, required=False, help='Newick Tree of strains')
+    parser.add_argument('--in_groups', type=str, required=False, help='Tab delimited file of genotypes')
     parser.add_argument('--in_meta', type=str, required=True, help='Tab delimited file of metadata', default=None)
     parser.add_argument('--reference', type=str, required=True, help='Reference genbank or fasta sequence from VCF')
     parser.add_argument('--outdir', type=str, required=True, help='Output Directory to put results')
@@ -52,7 +53,7 @@ def parse_args():
                         default=None)
     parser.add_argument('--klen', type=int, required=False, help='kmer length', default=18)
     parser.add_argument('--min_members', type=int, required=False,
-                        help='Minimum number of members for a clade to be valid', default=1)
+                        help='Minimum number of members for a clade to be valid', default=2)
     parser.add_argument('--min_snp_count', type=int, required=False,
                         help='Minimum number of unique snps for a clade to be valid',
                         default=1)
@@ -63,10 +64,13 @@ def parse_args():
                         default=6)
     parser.add_argument('--rcor_thresh', type=float, required=False, help='Correlation coefficient threshold',
                         default=0.4)
+    parser.add_argument('--delim', type=str, required=False, help='Genotype delimiter in group file',
+                        default=None)
     parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('--no_plots', required=False, help='Disable plotting', action='store_true')
     parser.add_argument('--keep_tmp', required=False, help='Keep interim files', action='store_true')
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
+    parser.add_argument('--resume', required=False, help='Resume previous analysis', action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
     return parser.parse_args()
@@ -140,14 +144,20 @@ def write_node_report(clade_data, outfile):
     :return:
     '''
     fh = open(outfile, 'w')
-    fh.write("clade_id\tchrom\tpos\tbase\tis_canonical\tnum_clade_members\tnum_members\tis_ref\n")
+    write_header = True
+    header = ['clade_id']
     for clade_id in clade_data:
         row = [clade_id]
         for feat in clade_data[clade_id]:
+            if write_header:
+                header.append(feat)
             value = clade_data[clade_id][feat]
             if isinstance(value, list):
                 value = ";".join([str(x) for x in value])
             row.append(value)
+        if write_header:
+            fh.write("{}\n".format("\t".join([str(x) for x in header])))
+            write_header = False
         fh.write("{}\n".format("\t".join([str(x) for x in row])))
     fh.close()
 
@@ -216,6 +226,70 @@ def identify_canonical_snps(ete_tree_obj, vcf_file, min_member_count=1):
                     break
             clade_id = best_node_id
             clade_total_members = len(node_lookup[clade_id])
+
+            snps[chrom][pos][base] = {'clade_id': clade_id, 'is_canonical': is_canonical,
+                                      'num_clade_members': clade_total_members, 'num_members': clade_total_members,
+                                      'is_ref': is_ref}
+        count_snps += 1
+        data = vcf.process_row()
+
+    return snps
+
+def identify_canonical_snps_groups(groups, vcf_file):
+    '''
+    Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree
+    :param ete_tree_obj: ETE3 tree object
+    :param vcf_file: str path to vcf or tsv snp data
+    :return: dict of snp_data data structure
+    '''
+    vcf = vcfReader(vcf_file)
+    data = vcf.process_row()
+    samples = vcf.samples
+    num_samples = len(samples)
+    snps = {}
+    count_snps = 0
+    if data is not None:
+        count_snps += 1
+
+    while data is not None:
+        chrom = data['#CHROM']
+        pos = int(data['POS']) - 1
+        if not chrom in snps:
+            snps[chrom] = {}
+        snps[chrom][pos] = {}
+        assignments = {}
+        for sample_id in samples:
+            base = data[sample_id]
+            if not base in assignments:
+                assignments[base] = []
+            assignments[base].append(sample_id)
+        is_ambig = False
+        if 'N' in assignments:
+            is_ambig = True
+        for base in assignments:
+            if not base in ['A', 'T', 'C', 'G']:
+                continue
+            in_samples = set(assignments[base])
+            is_ref = base == data['REF']
+            is_canonical = False
+            best_node_id = ''
+            best_count = num_samples
+
+            for clade_id in groups:
+                node_leaves = groups[clade_id]
+                if is_ambig:
+                    node_leaves = set(node_leaves) - set(assignments['N'])
+                i1 = (in_samples & node_leaves)
+                i2 = (node_leaves & in_samples)
+                num_out_members = len(node_leaves - i2)
+                if len(in_samples - node_leaves) == 0 & num_out_members < best_count:
+                    best_count = num_out_members
+                    best_node_id = clade_id
+                if num_out_members == 0 and len(in_samples) == len(i1):
+                    is_canonical = True
+                    break
+            clade_id = best_node_id
+            clade_total_members = len(groups[clade_id])
 
             snps[chrom][pos][base] = {'clade_id': clade_id, 'is_canonical': is_canonical,
                                       'num_clade_members': clade_total_members, 'num_members': clade_total_members,
@@ -416,6 +490,88 @@ def calc_node_associations(metadata, clade_data, ete_tree_obj):
 
     return clade_data
 
+def calc_node_associations_groups(metadata, clade_data, group_data):
+    '''
+    :param metadata:
+    :param clade_data:
+    :param ete_tree_obj:
+    :return:
+    '''
+    samples = set(metadata.keys())
+    num_samples = len(samples)
+    for clade_id in group_data['genotypes']:
+        in_members = group_data['genotypes'][clade_id]
+        features = {}
+        genotype_assignments = []
+        metadata_labels = {}
+        ftest = {}
+        metadata_counts = {}
+        for sample_id in samples:
+            if sample_id in in_members:
+                genotype_assignments.append(1)
+            else:
+                genotype_assignments.append(0)
+            for field_id in metadata[sample_id]:
+                value = metadata[sample_id][field_id]
+                if not field_id in metadata_labels:
+                    metadata_counts[field_id] = {}
+                    metadata_labels[field_id] = []
+                    ftest[field_id] = {}
+                if not value in ftest[field_id]:
+                    metadata_counts[field_id][value] = 0
+                    ftest[field_id][value] = {
+                        'pos-pos': set(),
+                        'pos-neg': set(),
+                        'neg-pos': set(),
+                        'neg-neg': set()
+                    }
+                metadata_counts[field_id][value] += 1
+                if sample_id in in_members:
+                    ftest[field_id][value]['pos-pos'].add(sample_id)
+                else:
+                    ftest[field_id][value]['neg-pos'].add(sample_id)
+
+                metadata_labels[field_id].append(value)
+                if not field_id in features:
+                    features[field_id] = {}
+
+                if not value in features[field_id]:
+                    features[field_id][value] = 0
+                if sample_id in in_members:
+                    features[field_id][value] += 1
+
+        for field_id in metadata_labels:
+            category_1 = []
+            category_2 = []
+            for idx, value in enumerate(metadata_labels[field_id]):
+                if isinstance(value,float):
+                    if math.isnan(value):
+                        continue
+                value = str(value)
+                if len(value) == 0 or value == 'nan':
+                    continue
+                category_1.append(genotype_assignments[idx])
+                category_2.append(metadata_counts[field_id][value])
+
+            clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
+            clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
+            clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
+            clade_data[clade_id]['fisher'][field_id] = {}
+
+            for value in ftest[field_id]:
+                ftest[field_id][value]['neg-neg'] = (
+                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
+                ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
+                table = [
+                    [len(ftest[field_id][value]['pos-pos']),
+                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
+                    [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
+                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
+                ]
+                oddsr, p = fisher_exact(table, alternative='greater')
+                clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
+
+    return clade_data
 
 
 
@@ -510,6 +666,7 @@ def temporal_signal(metadata, clade_data, ete_tree_obj, rcor_thresh):
             is_present = True
         clade_data[clade_id]['is_temporal_signal_present'] = is_present
     return clade_data
+
 
 
 def as_range(values):
@@ -1110,6 +1267,55 @@ def clade_worker(ete_tree_obj, tree_file, vcf_file, metadata_file, min_snp_count
 
     return clade_data
 
+def clade_worker_groups(group_data, vcf_file, metadata_file, min_snp_count, outdir, prefix,max_states=6,
+                 min_member_count=1, rcor_thresh=0.4):
+    '''
+    Parameters
+    ----------
+    ete_tree_obj
+    tree_file
+    vcf_file
+    min_member_count
+    min_snp_count
+    max_states
+    outdir
+    Returns
+    -------
+    '''
+    logging.info("Identifying canonical snps")
+    snps = identify_canonical_snps_groups(group_data, vcf_file)
+    write_snp_report(snps, os.path.join(outdir, "{}-snps.all.txt".format(prefix)))
+    snps = snp_based_filter(snps, min_member_count, max_states)
+    clade_data = get_valid_nodes(snps, min_snp_count)
+
+    logging.info("Parsing sample metadata")
+    metadata = parse_metadata(metadata_file)
+
+    if len(metadata) > 0:
+        logging.info("Calculating metadata associations")
+        clade_data = calc_node_associations_groups(metadata, clade_data, group_data)
+        write_node_report(clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
+
+    genotypes = {}
+    for genotype in group_data['heirarchy']:
+        samples = group_data['heirarchy'][genotype]
+        for sample_id in samples:
+            genotypes[sample_id] = genotype.split('.')
+
+    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)), delimeter='.')
+
+    leaf_meta = {}
+    for sample_id in genotypes:
+        genotype = '.'.join(genotypes[sample_id])
+        leaf_meta[sample_id] = [genotype]
+        for field in metadata[sample_id]:
+            leaf_meta[sample_id].append(metadata[sample_id][field])
+
+
+
+    return clade_data
+
+
 
 def metadata_worker(metadata_file, clade_data, ete_tree_obj, outdir, prefix,rcor_thresh=0.2):
     '''
@@ -1479,9 +1685,55 @@ def call_consensus_snp_genotypes(ref_seq,vcf_file, genotype_map,outfile,min_perc
     return
 
 
+def parse_groups(file,delim=None):
+    df = pd.read_csv(file,sep="\t",header=0)
+    df = df.astype(str)
+    groups = {}
+    genotypes = df['genotype'].tolist()
+
+    #Determine delimiter
+    if delim == None:
+        delim_counts = {
+            '-':0,
+            ':':0,
+            ';':0,
+            '.':0,
+            '/':0,
+            '|':0,
+            ',':0,
+            ' ':0,
+        }
+        for genotype in genotypes:
+            for d in delim_counts:
+                delim_counts[d]+= genotype.count(d)
+        delim = max(delim_counts, key=delim_counts.get)
+
+    #Build genotype lookup
+    for genotype in genotypes:
+        genotype = genotype.split(delim)
+        for i in range(1,len(genotype)+1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g] = set()
+    print(groups)
+    #Add sample to each genotype
+    for row in df.itertuples():
+        sample_id = row.sample_id
+        genotype = row.genotype.split(delim)
+        for i in range(1,len(genotype)+1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g].add(sample_id)
+
+    return {'sample_list':list(df['sample_id'].tolist()),'genotypes':groups,'heirarchy':set(df['genotype'].tolist())}
+
+
+
+
+
+
 def run():
     cmd_args = parse_args()
     tree_file = cmd_args.in_nwk
+    group_file = cmd_args.in_groups
     variant_file = cmd_args.in_var
     metadata_file = cmd_args.in_meta
     reference_file = cmd_args.reference
@@ -1497,62 +1749,118 @@ def run():
     max_states = cmd_args.max_states
     num_threads = cmd_args.num_threads
     keep_tmp = cmd_args.keep_tmp
+    delim = cmd_args.delim
 
     logging = init_console_logger(3)
+
+    #Initialize Ray components
     os.environ['RAY_worker_register_timeout_seconds'] = '60'
     num_cpus = psutil.cpu_count(logical=False)
     if num_threads > num_cpus:
         num_threads = num_cpus
-    tmp_dir_name = tempfile.TemporaryDirectory().name
+
     if not ray.is_initialized():
         ray.init(ignore_reinit_error=True, num_cpus=num_threads)
-    if '.gbk' in reference_file or '.gb' in reference_file:
-        seq_file_type = 'genbank'
-    else:
-        seq_file_type = 'fasta'
 
-    files = [tree_file, variant_file, metadata_file, reference_file]
+    #Initialize directory
+    if not os.path.isdir(outdir):
+        logging.info("Creating analysis directory {}".format(outdir))
+        os.mkdir(outdir, 0o755)
+
+    analysis_dir = os.path.join(outdir, "_tmp")
+    if not os.path.isdir(analysis_dir):
+        logging.info("Creating temporary analysis directory {}".format(analysis_dir))
+        os.mkdir(analysis_dir, 0o755)
+
+    #Toggle tree based or group based identification
+    if tree_file is not None:
+        mode = 'tree'
+        status = validate_file(tree_file)
+        if status == False:
+            logging.error("Error file {} either does not exist or is empty".format(tree_file))
+            sys.exit()
+    elif group_file is not None:
+        mode = 'group'
+        status = validate_file(group_file)
+        if status == False:
+            logging.error("Error file {} either does not exist or is empty".format(group_file))
+            sys.exit()
+    else:
+        logging.error("You must specify either a tree file or group file")
+        sys.exit()
+
+    #Validate input file presence
+    files = [variant_file, metadata_file, reference_file]
     for file in files:
         status = validate_file(file)
         if status == False:
             logging.error("Error file {} either does not exist or is empty".format(file))
             sys.exit()
 
-    if root_method is None and root_name is not None:
-        root_method = 'outgroup'
+    #Parse reference sequence
+    if '.gbk' in reference_file or '.gb' in reference_file:
+        seq_file_type = 'genbank'
+    else:
+        seq_file_type = 'fasta'
 
-    # validate samples present in all files match
-    ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True, ladderize=True,
-                              method='midpoint')
-    tree_samples = set(ete_tree_obj.get_leaf_names())
-    if root_method == 'midpoint':
-        root_name = ete_tree_obj.get_tree_root().name
-
-    if root_name not in tree_samples:
-        logging.error("Error specified root {} is not in tree: {}".format(root_name, tree_samples))
-        sys.exit()
-
-    if root_method == 'outgroup':
-        ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True,
-                                  ladderize=True,
-                                  method='outgroup',outgroup=root_name)
-
-
-    for sample_id in tree_samples:
-        if isint(sample_id):
-            logging.error("Error sample_ids cannot be integers offending sample '{}'".format(sample_id))
-            sys.exit()
+    ref_seq = {}
+    ref_features = {}
+    if seq_file_type == 'genbank':
+        ref_features = parse_reference_gbk(reference_file)
+        for chrom in ref_features:
+            ref_seq[chrom] = ref_features[chrom]['features']['source']
+    else:
+        with open(reference_file, "r") as handle:
+            for record in SeqIO.parse(handle, "fasta"):
+                id = str(record.id)
+                seq = str(record.seq).upper()
+                ref_seq[id] = seq
+        handle.close()
 
     vcf_samples = set(vcfReader(variant_file).samples)
-
     metadata = parse_metadata(metadata_file)
 
-    sample_set = tree_samples | vcf_samples | set(metadata.keys())
-    num_samples = len(sample_set)
-    missing_samples = sample_set - tree_samples
+
+    if mode == 'tree':
+        if root_method is None and root_name is not None:
+            root_method = 'outgroup'
+
+        # validate samples present in all files match
+        ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True, ladderize=True,
+                                  method='midpoint')
+        tree_samples = set(ete_tree_obj.get_leaf_names())
+        if root_method == 'midpoint':
+            root_name = ete_tree_obj.get_tree_root().name
+
+        if root_name not in tree_samples:
+            logging.error("Error specified root {} is not in tree: {}".format(root_name, tree_samples))
+            sys.exit()
+
+        if root_method == 'outgroup':
+            ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True,
+                                      ladderize=True,
+                                      method='outgroup',outgroup=root_name)
+
+
+        for sample_id in tree_samples:
+            if isint(sample_id):
+                logging.error("Error sample_ids cannot be integers offending sample '{}'".format(sample_id))
+                sys.exit()
+        group_samples = tree_samples
+        sample_set = tree_samples | vcf_samples | set(metadata.keys())
+        num_samples = len(sample_set)
+        missing_samples = sample_set - tree_samples
+    else:
+        group_data = parse_groups(group_file,delim=delim )
+        group_samples = set(group_data['sample_list'])
+        sample_set = group_samples | vcf_samples | set(metadata.keys())
+        num_samples = len(sample_set)
+        missing_samples = sample_set - group_samples
+
+    #Validate Sample id's accross all inputs
     if len(missing_samples) > 0:
         logging.error(
-            "Error {} samples are not present in tree file: {}".format(len(missing_samples), ','.join(missing_samples)))
+            "Error {} samples are not present in tree or genotype file: {}".format(len(missing_samples), ','.join(missing_samples)))
         logging.error(
             "Missing samples present in Metadata file {} : {}".format(metadata_file,
                                                                       ','.join(set(metadata.keys()) & missing_samples)))
@@ -1577,89 +1885,70 @@ def run():
                                                                                                   len(sample_set)))
         sys.exit()
 
+    if mode == 'tree':
+        genotypes = generate_genotypes(ete_tree_obj)
+        write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)), delimeter='.')
+        clade_data = clade_worker(ete_tree_obj, tree_file, variant_file, metadata_file, min_snp_count, outdir, prefix,
+                                  max_states,
+                                  min_member_count, rcor_thresh)
+        valid_nodes = set()
+        for clade_id in clade_data:
+            if clade_data[clade_id]['is_selected']:
+                valid_nodes.add(clade_id)
 
-    ref_seq = {}
-    ref_features = {}
-    if seq_file_type == 'genbank':
-        ref_features = parse_reference_gbk(reference_file)
-        for chrom in ref_features:
-            ref_seq[chrom] = ref_features[chrom]['features']['source']
+        pruned_tree, valid_nodes = prune_tree(ete_tree_obj, valid_nodes)
+        genotypes = generate_genotypes(pruned_tree)
+
+        leaf_meta = {}
+        for sample_id in genotypes:
+            genotype = '.'.join(genotypes[sample_id])
+            leaf_meta[sample_id] = [genotype]
+            for field in metadata[sample_id]:
+                leaf_meta[sample_id].append(metadata[sample_id][field])
+
+        logging.info("Creating full tree figure")
+        m_ete_tree_obj = copy.deepcopy(ete_tree_obj)
+        annotate_tree(os.path.join(outdir, "{}-fulltree.pdf".format(prefix)), ete_tree_obj, valid_nodes,
+                      leaf_meta=leaf_meta, dpi=10000)
+        logging.info("Creating representative tree figure")
+        plot_single_rep_tree(os.path.join(outdir, "{}-reducedtree.pdf".format(prefix)), m_ete_tree_obj, valid_nodes,
+                             leaf_meta=leaf_meta, dpi=10000)
+        # Preserve the root
+        filt = {'0': clade_data['0']}
     else:
-        with open(reference_file, "r") as handle:
-            for record in SeqIO.parse(handle, "fasta"):
-                id = str(record.id)
-                seq = str(record.seq).upper()
-                ref_seq[id] = seq
-        handle.close()
+        shutil.copyfile(group_file, os.path.join(outdir,"{}-genotypes.raw.txt".format(prefix)))
 
-    if not os.path.isdir(outdir):
-        logging.info("Creating analysis directory {}".format(outdir))
-        os.mkdir(outdir, 0o755)
 
-    analysis_dir = os.path.join(outdir, "_tmp")
-    if not os.path.isdir(analysis_dir):
-        logging.info("Creating temporary analysis directory {}".format(analysis_dir))
-        os.mkdir(analysis_dir, 0o755)
-
-    genotypes = generate_genotypes(ete_tree_obj)
-    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)), delimeter='.')
-
-    clade_data = clade_worker(ete_tree_obj, tree_file, variant_file, metadata_file, min_snp_count, outdir,prefix , max_states,
-                              min_member_count, rcor_thresh)
-
-    valid_nodes = set()
-    for clade_id in clade_data:
-        if clade_data[clade_id]['is_selected']:
-            valid_nodes.add(clade_id)
-
-    pruned_tree, valid_nodes = prune_tree(ete_tree_obj, valid_nodes)
-    genotypes = generate_genotypes(pruned_tree)
-
-    leaf_meta = {}
-    for sample_id in genotypes:
-        genotype = '.'.join(genotypes[sample_id])
-        leaf_meta[sample_id] = [genotype]
-        for field in metadata[sample_id]:
-            leaf_meta[sample_id].append(metadata[sample_id][field])
-
-    logging.info("Creating full tree figure")
-    m_ete_tree_obj = copy.deepcopy(ete_tree_obj)
-    tree_fig = annotate_tree(os.path.join(outdir, "{}-fulltree.pdf".format(prefix)), ete_tree_obj, valid_nodes, leaf_meta=leaf_meta,h=6400,w=6400,dpi=10000)
-    logging.info("Creating representative tree figure")
-    plot_single_rep_tree(os.path.join(outdir, "{}-reducedtree.pdf".format(prefix)),  m_ete_tree_obj, valid_nodes, leaf_meta=leaf_meta,h=6400,w=6400,dpi=10000)
     logging.info("Identifying genotyping kmers")
     kmer_groups = kmer_worker(outdir, ref_seq, variant_file, klen, min_member_count, num_samples, prefix, num_threads)
 
     selected_kmers = select_kmers(kmer_groups, clade_data, klen)
-
-
     valid_postions = set(selected_kmers.keys())
-    # Preserve the root
-    filt = {'0': clade_data['0']}
 
+    if mode == 'tree':
+        for clade_id in clade_data:
+            positions = clade_data[clade_id]['pos']
+            if len(set(positions) & valid_postions) == 0:
+                continue
+            chr = []
+            fb = []
+            pos = []
+            for idx, p in enumerate(positions):
+                if p in valid_postions:
+                    chr.append(clade_data[clade_id]['chr'][idx])
+                    fb.append(clade_data[clade_id]['bases'][idx])
+                    pos.append(p)
+            clade_data[clade_id]['chrom'] = chr
+            clade_data[clade_id]['pos'] = pos
+            clade_data[clade_id]['bases'] = fb
 
-    for clade_id in clade_data:
-        positions = clade_data[clade_id]['pos']
-        if len(set(positions) & valid_postions) == 0:
-            continue
-        chr = []
-        fb = []
-        pos = []
-        for idx, p in enumerate(positions):
-            if p in valid_postions:
-                chr.append(clade_data[clade_id]['chr'][idx])
-                fb.append(clade_data[clade_id]['bases'][idx])
-                pos.append(p)
-        clade_data[clade_id]['chrom'] = chr
-        clade_data[clade_id]['pos'] = pos
-        clade_data[clade_id]['bases'] = fb
+            filt[clade_id] = clade_data[clade_id]
+        clade_data = filt
 
-        filt[clade_id] = clade_data[clade_id]
-    clade_data = filt
-    logging.info("Readinf genotype assigments")
-    logging.info("Readinf genotype assigments")
+    logging.info("Reading genotype assigments")
     genotype_assignments = pd.read_csv(os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)),sep="\t",header=0).astype(str)
     genotype_assignments = dict(zip(genotype_assignments['sample_id'], genotype_assignments['genotype']))
+
     logging.info("Constructing kmer rule set")
     kmer_rule_obj = construct_ruleset(selected_kmers, genotype_assignments,outdir,prefix,min_perc)
 
