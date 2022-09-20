@@ -1,12 +1,11 @@
 import copy
-import tempfile
-import shutil
 import logging
-import math
 import os
 import psutil
 import shutil
+import math
 import sys
+import time
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
 from statistics import mean
 
@@ -76,253 +75,466 @@ def parse_args():
     return parser.parse_args()
 
 
-def generate_genotypes(tree):
+def create_scheme_obj(header, selected_kmers, clade_info, sample_genotypes, kmer_rule_obj, ref_features={},
+                      trans_table=11):
     '''
-    Accepts a ETE3 tree object and returns the heirarchal node id's for every leaf
-    :param tree: ETE3 tree object
-    :return: dict of leaf names and list of node heirarchy
+    Parameters
+    ----------
+    header
+    selected_kmers
+    clade_info
+    sample_genotypes
+    ref_features
+    Returns
+    -------
     '''
-    samples = tree.get_leaf_names()
-    geno = {}
-    for sample_id in samples:
-        geno[sample_id] = []
-    for node in tree.traverse("preorder"):
-        node_id = node.name
-        if node.is_leaf():
+
+    perf_annotation = True
+    ref_id = list(ref_features.keys())[0]
+    ref_seq = ''
+    if not 'features' in ref_features[ref_id]:
+        perf_annotation = False
+        ref_seq = ref_features[ref_id]
+    else:
+        ref_seq = ref_features[ref_id]['features']['source']
+
+    kmer_key = 0
+    unique_genotypes = set()
+    for sample_id in sample_genotypes:
+        genotype = '.'.join(sample_genotypes[sample_id])
+        if not genotype in unique_genotypes:
+            unique_genotypes.add(genotype)
+
+    node_members = {}
+    for genotype in unique_genotypes:
+        genotype = genotype.split('.')
+        num_genotypes = len(genotype)
+        for i in range(0, num_genotypes):
+            node_id = genotype[i]
+            if not node_id in node_members:
+                node_members[node_id] = ['.'.join(genotype)]
+            for k in range(i, num_genotypes):
+                g = '.'.join(genotype[0:k + 1])
+                node_members[node_id].append(g)
+    unique_genotypes = set()
+    for node_id in node_members:
+        unique_genotypes = unique_genotypes | set(node_members[node_id])
+
+    for node_id in node_members:
+        node_members[node_id] = sorted(list(set(node_members[node_id])))
+
+    num_genotypes = len(unique_genotypes)
+    scheme = []
+    max_entropy = -1
+    for pos in selected_kmers:
+        ref_base = ref_seq[pos]
+        bases = list(selected_kmers[pos].keys())
+        alt_bases = []
+        for b in bases:
+            if b == ref_base:
+                continue
+            alt_bases.append(b)
+
+        if len(alt_bases) == 0:
+            alt_bases = [ref_base]
+            # Skip positions where there are multiple kmers to represent a conserved kmer
+            if len(selected_kmers[pos][ref_base]) > 1:
+                continue
+        for i in range(0, len(alt_bases)):
+            alt_base = alt_bases[i]
+            mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
+            for k in range(0, len(bases)):
+                base = bases[k]
+                dna_name = "{}{}{}".format(ref_base, pos + 1, base)
+                for kIndex in selected_kmers[pos][base]:
+                    obj = {}
+                    for field_id in header:
+                        obj[field_id] = ''
+
+                    start = selected_kmers[pos][base][kIndex]['aStart']
+                    end = selected_kmers[pos][base][kIndex]['aEnd']
+                    if perf_annotation:
+                        gene_feature = find_overlaping_gene_feature(start, end, ref_features, ref_id)
+                    else:
+                        gene_feature = None
+                        gene_name = 'Intergenic'
+
+                    ref_var_aa = ''
+                    alt_var_aa = ''
+                    is_cds = False
+                    gene_name = ''
+                    is_silent = True
+                    aa_name = ''
+                    aa_var_start = -1
+                    if gene_feature is not None:
+                        is_cds = True
+                        gene_name = gene_feature['gene_name']
+                        positions = gene_feature['positions']
+                        gene_start = -1
+                        gene_end = -1
+                        for s, e in positions:
+                            if gene_start == -1:
+                                gene_start = s
+                                gene_end = e
+                            else:
+                                if gene_start > s:
+                                    gene_start = s
+                                if gene_end < e:
+                                    gene_end = e
+                        gene_seq = ref_seq[gene_start:gene_end + 1]
+                        rel_var_start = abs(start - gene_start)
+                        aa_var_start = int(rel_var_start / 3)
+                        codon_var_start = aa_var_start * 3
+                        codon_var_end = codon_var_start + 3
+                        ref_var_dna = gene_seq[codon_var_start:codon_var_end]
+                        ref_var_aa = str(Seq(ref_var_dna).translate(table=trans_table))
+                        mod_gene_seq = list(ref_seq[gene_start:gene_end + 1])
+                        mod_gene_seq[rel_var_start] = base
+                        alt_var_dna = ''.join(mod_gene_seq[codon_var_start:codon_var_end])
+                        alt_var_aa = str(Seq(alt_var_dna).translate(table=trans_table))
+                        aa_name = "{}{}{}".format(ref_var_aa, aa_var_start + 1, alt_var_aa)
+                        if alt_var_aa != ref_var_aa:
+                            is_silent = False
+
+                    obj['key'] = kmer_key
+                    obj['mutation_key'] = mutation_key
+                    obj['dna_name'] = dna_name
+                    obj['variant_start'] = pos + 1
+                    obj['variant_end'] = pos + 1
+                    obj['kmer_start'] = selected_kmers[pos][base][kIndex]['aStart'] + 1
+                    obj['kmer_end'] = selected_kmers[pos][base][kIndex]['aEnd'] + 1
+                    obj['target_variant'] = base
+                    obj['target_variant_len'] = 1
+                    obj['mutation_type'] = 'snp'
+                    obj['ref_state'] = ref_base
+                    obj['alt_state'] = alt_base
+                    state = 'ref'
+                    if base == alt_base and base != ref_base:
+                        state = 'alt'
+                    obj['state'] = state
+                    obj['kseq'] = selected_kmers[pos][base][kIndex]['kseq']
+                    obj['klen'] = len(obj['kseq'])
+                    obj['homopolymer_len'] = calc_homopolymers(obj['kseq'])
+                    obj['is_ambig_ok'] = True
+                    obj['is_kmer_found'] = True
+                    obj['is_kmer_length_ok'] = True
+                    obj['is_kmer_unique'] = True
+                    obj['is_valid'] = True
+                    obj['kmer_entropy'] = -1
+                    obj['positive_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['positive_genotypes'])
+                    obj['partial_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['partial_genotypes'])
+                    obj['gene_name'] = gene_name
+                    if gene_feature is not None:
+                        obj['gene_start'] = gene_start + 1
+                        obj['gene_end'] = gene_end + 1
+                        obj['cds_start'] = codon_var_start + 1
+                        obj['cds_end'] = codon_var_end
+                        obj['aa_name'] = aa_name
+                        obj['aa_start'] = aa_var_start + 1
+                        obj['aa_end'] = aa_var_start + 1
+
+                    obj['is_cds'] = is_cds
+                    obj['is_frame_shift'] = False
+                    obj['is_silent'] = is_silent
+
+                    is_found = False
+                    for clade_id in clade_info:
+                        if not clade_info[clade_id]['is_selected']:
+                            continue
+                        for idx, p in enumerate(clade_info[clade_id]['pos']):
+                            if pos != p:
+                                continue
+                            b = clade_info[clade_id]['bases'][idx]
+                            if b != base:
+                                continue
+                            if clade_id in node_members:
+                                counts = [0] * num_genotypes
+                                for k in range(0, len(node_members[clade_id])):
+                                    counts[k] += 1
+
+                                obj['kmer_entropy'] = calc_shanon_entropy(counts)
+                                if obj['kmer_entropy'] > max_entropy:
+                                    max_entropy = obj['kmer_entropy']
+                                is_found = True
+                                break
+                        if is_found:
+                            break
+                    scheme.append(obj)
+                    kmer_key += 1
+    for i in range(0, len(scheme)):
+        e = scheme[i]['kmer_entropy']
+        if e == -1:
+            scheme[i]['kmer_entropy'] = max_entropy
+
+    return scheme
+
+
+def find_overlaping_gene_feature(start, end, ref_info, ref_name):
+    cds_start = start
+    cds_end = end
+    if not ref_name in ref_info:
+        return None
+    for feat in ref_info[ref_name]['features']['CDS']:
+        positions = feat['positions']
+        gene_start = -1
+        gene_end = -1
+        for s, e in positions:
+            if gene_start == -1:
+                gene_start = s
+            if gene_end < e:
+                gene_end = e
+            if cds_start >= s and cds_end <= e:
+                return feat
+    return None
+
+
+def construct_ruleset(selected_kmers, genotype_map, outdir, prefix, min_perc):
+    kmer_rules = {}
+    for pos in selected_kmers:
+        for base in selected_kmers[pos]:
+            for kIndex in selected_kmers[pos][base]:
+                kseq = selected_kmers[pos][base][kIndex]['kseq']
+                kmer_rules[kseq] = {}
+
+    genotype_counts = {}
+    for sample_id in genotype_map:
+        genotype = genotype_map[sample_id]
+        if not genotype in genotype_counts:
+            genotype_counts[genotype] = 0
+        genotype_counts[genotype] += 1
+
+    kmer_file = os.path.join(outdir, "{}-filt.kmers.txt".format(prefix))
+    fh = open(kmer_file, 'r')
+    header = next(fh).split("\t")
+    for line in fh:
+        line = line.split("\t")
+        if len(line) != 5:
             continue
-        leaves = node.get_leaf_names()
-        for sample_id in leaves:
-            geno[sample_id].append(node_id)
-    return geno
+        kseq = line[3]
+        samples = line[4].split(',')
+        genotypes = {}
+        for sample_id in samples:
+            sample_id = sample_id.split("~")[0]
+            genotype = genotype_map[sample_id]
+            if not genotype in genotypes:
+                genotypes[genotype] = 0
+
+            genotypes[genotype] += 1
+
+        kmer_rules[kseq] = {'positive_genotypes': [], 'partial_genotypes': []}
+        for genotype in genotypes:
+            perc = genotypes[genotype] / genotype_counts[genotype]
+            if perc >= min_perc:
+                kmer_rules[kseq]['positive_genotypes'].append(genotype)
+            else:
+                kmer_rules[kseq]['partial_genotypes'].append(genotype)
+
+    return kmer_rules
 
 
-def write_genotypes(genotypes, outfile, delimeter='.'):
+def validate_file(file):
+    '''
+    Parameters
+    ----------
+    file
+    Returns
+    -------
+    '''
+    if os.path.isfile(file) and os.path.getsize(file) > 9:
+        return True
+    else:
+        return False
+
+
+def node_list_attr(clade_data, attribute):
+    '''
+    Parameters
+    ----------
+    clade_data
+    attribute
+    Returns
+    -------
+    '''
+    values = []
+    for clade_id in clade_data:
+        value = clade_data[clade_id][attribute]
+        if isinstance(value, list):
+            value = len(value)
+        values.append(value)
+    return values
+
+
+def create_compressed_hierarchy(ete_tree_obj, selected_nodes):
+    '''
+    Parameters
+    ----------
+    ete_tree_obj
+    selected_nodes
+    Returns
+    -------
+    '''
+    selected_nodes.reverse()
+    sample_genotypes = get_tree_genotypes(ete_tree_obj)
+    valid_nodes = ['0']
+    filt_nodes = []
+    for idx, nodes in enumerate(selected_nodes):
+        for ni, node_id in enumerate(nodes):
+            valid_nodes.append(node_id)
+        if len(nodes) > 0:
+            filt_nodes.append(nodes)
+    for sample_id in sample_genotypes:
+
+        genotype = sample_genotypes[sample_id]
+        filt = []
+        for node_id in genotype:
+            if node_id in valid_nodes:
+                filt.append(node_id)
+
+        for idx, nodes in enumerate(filt_nodes):
+            ovl = set(nodes) & set(filt)
+            if len(ovl) > 1:
+                match = False
+                genotype = []
+                for i in range(0, len(filt)):
+                    node = filt[i]
+                    if node in ovl:
+                        if not match:
+                            genotype.append(node)
+                            match = True
+                            continue
+                    else:
+                        genotype.append(node)
+                filt = genotype
+        sample_genotypes[sample_id] = filt
+
+    valid_nodes = {'0'}
+    terminal_nodes = set()
+    for sample_id in sample_genotypes:
+        valid_nodes = valid_nodes | set(sample_genotypes[sample_id])
+        terminal_nodes.add(sample_genotypes[sample_id][-1])
+    valid_nodes = valid_nodes | terminal_nodes
+
+    return valid_nodes
+
+
+def select_bifucating_nodes(ete_tree_obj, clade_data):
+    '''
+    Parameters
+    ----------
+    ete_tree_obj
+    clade_data
+    Returns
+    -------
+    '''
+    bifurcating_nodes = []
+    for clade_id in clade_data:
+        children = ete_tree_obj.search_nodes(name=clade_id)
+        if len(children) == 0:
+            continue
+        children = children[0].get_children()
+        node_count = 0
+        if clade_id in bifurcating_nodes:
+            continue
+        nodes = [clade_id]
+        for child in children:
+            if not child.is_leaf() and child.name in clade_data:
+                node_count += 1
+                nodes.append(child.name)
+        if node_count > 1:
+            bifurcating_nodes += nodes
+    return bifurcating_nodes
+
+
+def select_nodes(clade_data, dist_ranges, min_count=1):
+    '''
+    Parameters
+    ----------
+    clade_data
+    dist_ranges
+    min_count
+    Returns
+    -------
+    '''
+    num_ranks = len(dist_ranges)
+    candidate_nodes = []
+    for i in range(0, num_ranks):
+        candidate_nodes.append([])
+    candidate_nodes[-1].append('0')
+    for clade_id in clade_data:
+
+        if len(clade_data[clade_id]['chr']) < min_count:
+            continue
+        ave_dist = clade_data[clade_id]['ave_dist']
+
+        for i, tuple in enumerate(dist_ranges):
+            s = tuple[0]
+            e = tuple[1]
+            if ave_dist >= s and ave_dist < e:
+                candidate_nodes[i].append(clade_id)
+    return candidate_nodes
+
+
+def sample_dist_summary(distances, num_bins=25):
+    '''
+    Divides the distances into equal sized bins
+    :param distances: list of distances between nodes
+    :return: dict
+    '''
+    df = pd.DataFrame(distances, columns=['dist'])
+    qcut_series, qcut_intervals = pd.qcut(df['dist'], q=num_bins, retbins=True, duplicates='drop')
+    tmp = pd.DataFrame(qcut_series.value_counts(sort=True))
+    tmp = tmp.sort_index()
+    tmp.reset_index(inplace=True)
+    tmp = tmp.rename(columns={"index": "interval", "dist": "count"})
+    return {'summary': df.describe().to_dict(), 'results': tmp, 'intervals': qcut_intervals}
+
+
+def calc_node_distances(clade_data, ete_tree_obj):
+    '''
+    Accepts a dict of clade_data and for each node calculates the distance of all leaves to the node
+    :param clade_data: dict clade data structure of tree nodes
+    :param ete_tree_obj: ETE3 tree obj
+    :return: dict filtered clade data structure
+    '''
+    node_cache = ete_tree_obj.get_cached_content()
+
+    for node_id in ete_tree_obj.traverse():
+        clade_id = node_id.name
+        if clade_id not in clade_data:
+            continue
+        node_members = list(node_cache[node_id])
+        distances = []
+        for leaf in node_members:
+            dist = node_id.get_distance(leaf)
+            distances.append(dist)
+        min_dist = 0
+        max_dist = 0
+        ave_dist = 0
+        if len(distances) > 0:
+            min_dist = min(distances)
+            max_dist = max(distances)
+            ave_dist = mean(distances)
+        clade_data[clade_id]['min_dist'] = min_dist
+        clade_data[clade_id]['max_dist'] = max_dist
+        clade_data[clade_id]['ave_dist'] = ave_dist
+
+    return clade_data
+
+
+def write_genotypes(genotypes, outfile):
     '''
     Accepts a list of sample genotype heirarchies and writes them to a file
     :param genotypes: dict of leaf names with heirarchal list of node id's to represent tree structure
     :param outfile: str
-    :param delimeter: str
     :return:
     '''
     fh = open(outfile, 'w')
     fh.write("sample_id\tgenotype\n")
     for sample_id in genotypes:
-        genotype = delimeter.join(genotypes[sample_id])
+        genotype = genotypes[sample_id]
         fh.write("{}\t{}\n".format(sample_id, genotype))
     fh.close()
     return
-
-
-def write_snp_report(snp_data, outfile):
-    '''
-    Accepts snp_data dict data structure and writes snp details
-    :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
-    :param outfile: str
-    :return:
-    '''
-    fh = open(outfile, 'w')
-    fh.write("chrom\tpos\tbase\tclade_id\tis_canonical\tnum_clade_members\tnum_members\tis_ref\n")
-    for chrom in snp_data:
-        for pos in snp_data[chrom]:
-            for base in snp_data[chrom][pos]:
-                row = [chrom, pos, base,
-                       snp_data[chrom][pos][base]['clade_id'],
-                       snp_data[chrom][pos][base]['is_canonical'],
-                       snp_data[chrom][pos][base]['num_clade_members'],
-                       snp_data[chrom][pos][base]['num_members'],
-                       snp_data[chrom][pos][base]['is_ref']]
-                fh.write("{}\n".format("\t".join([str(x) for x in row])))
-    fh.close()
-    return
-
-
-def write_node_report(clade_data, outfile):
-    '''
-    Writes the Node information data to a tsv file
-    :param clade_data: dict Node information structure
-    :param outfile: str
-    :return:
-    '''
-    fh = open(outfile, 'w')
-    write_header = True
-    header = ['clade_id']
-    for clade_id in clade_data:
-        row = [clade_id]
-        for feat in clade_data[clade_id]:
-            if write_header:
-                header.append(feat)
-            value = clade_data[clade_id][feat]
-            if isinstance(value, list):
-                value = ";".join([str(x) for x in value])
-            row.append(value)
-        if write_header:
-            fh.write("{}\n".format("\t".join([str(x) for x in header])))
-            write_header = False
-        fh.write("{}\n".format("\t".join([str(x) for x in row])))
-    fh.close()
-
-    return
-
-
-def identify_canonical_snps(ete_tree_obj, vcf_file, min_member_count=1):
-    '''
-    Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree
-    :param ete_tree_obj: ETE3 tree object
-    :param vcf_file: str path to vcf or tsv snp data
-    :return: dict of snp_data data structure
-    '''
-    vcf = vcfReader(vcf_file)
-    data = vcf.process_row()
-    samples = vcf.samples
-    num_samples = len(samples)
-    snps = {}
-    count_snps = 0
-    if data is not None:
-        count_snps += 1
-    node_cache = ete_tree_obj.get_cached_content()
-    node_lookup = {}
-    for node_id in ete_tree_obj.traverse():
-        node_members = list(node_cache[node_id])
-        node_lookup[node_id.name] = set()
-        for leaf in node_members:
-            node_lookup[node_id.name].add(leaf.name)
-
-    while data is not None:
-        chrom = data['#CHROM']
-        pos = int(data['POS']) - 1
-        if not chrom in snps:
-            snps[chrom] = {}
-        snps[chrom][pos] = {}
-        assignments = {}
-        for sample_id in samples:
-            base = data[sample_id]
-            if not base in assignments:
-                assignments[base] = []
-            assignments[base].append(sample_id)
-        is_ambig = False
-        if 'N' in assignments:
-            is_ambig = True
-        for base in assignments:
-            if not base in ['A', 'T', 'C', 'G']:
-                continue
-            in_samples = set(assignments[base])
-            is_ref = base == data['REF']
-            is_canonical = False
-            best_node_id = ''
-            best_count = num_samples
-
-            for clade_id in node_lookup:
-                node_leaves = node_lookup[clade_id]
-                if is_ambig:
-                    node_leaves = set(node_leaves) - set(assignments['N'])
-                i1 = (in_samples & node_leaves)
-                i2 = (node_leaves & in_samples)
-                num_out_members = len(node_leaves - i2)
-                if len(in_samples - node_leaves) == 0 & num_out_members < best_count:
-                    best_count = num_out_members
-                    best_node_id = clade_id
-                if num_out_members == 0 and len(in_samples) == len(i1):
-                    is_canonical = True
-                    break
-            clade_id = best_node_id
-            clade_total_members = len(node_lookup[clade_id])
-
-            snps[chrom][pos][base] = {'clade_id': clade_id, 'is_canonical': is_canonical,
-                                      'num_clade_members': clade_total_members, 'num_members': clade_total_members,
-                                      'is_ref': is_ref}
-        count_snps += 1
-        data = vcf.process_row()
-
-    return snps
-
-def identify_canonical_snps_groups(groups, vcf_file):
-    '''
-    Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree
-    :param ete_tree_obj: ETE3 tree object
-    :param vcf_file: str path to vcf or tsv snp data
-    :return: dict of snp_data data structure
-    '''
-    vcf = vcfReader(vcf_file)
-    data = vcf.process_row()
-    samples = vcf.samples
-    num_samples = len(samples)
-    snps = {}
-    count_snps = 0
-    if data is not None:
-        count_snps += 1
-
-    while data is not None:
-        chrom = data['#CHROM']
-        pos = int(data['POS']) - 1
-        if not chrom in snps:
-            snps[chrom] = {}
-        snps[chrom][pos] = {}
-        assignments = {}
-        for sample_id in samples:
-            base = data[sample_id]
-            if not base in assignments:
-                assignments[base] = []
-            assignments[base].append(sample_id)
-        is_ambig = False
-        if 'N' in assignments:
-            is_ambig = True
-        for base in assignments:
-            if not base in ['A', 'T', 'C', 'G']:
-                continue
-            in_samples = set(assignments[base])
-            is_ref = base == data['REF']
-            is_canonical = False
-            best_node_id = ''
-            best_count = num_samples
-
-            for clade_id in groups:
-                node_leaves = groups[clade_id]
-                if is_ambig:
-                    node_leaves = set(node_leaves) - set(assignments['N'])
-                i1 = (in_samples & node_leaves)
-                i2 = (node_leaves & in_samples)
-                num_out_members = len(node_leaves - i2)
-                if len(in_samples - node_leaves) == 0 & num_out_members < best_count:
-                    best_count = num_out_members
-                    best_node_id = clade_id
-                if num_out_members == 0 and len(in_samples) == len(i1):
-                    is_canonical = True
-                    break
-            clade_id = best_node_id
-            clade_total_members = len(groups[clade_id])
-
-            snps[chrom][pos][base] = {'clade_id': clade_id, 'is_canonical': is_canonical,
-                                      'num_clade_members': clade_total_members, 'num_members': clade_total_members,
-                                      'is_ref': is_ref}
-        count_snps += 1
-        data = vcf.process_row()
-
-    return snps
-
-
-def snp_based_filter(snp_data, min_count, max_states):
-    '''
-    Accepts a snp_data dict and filters the dictionary to return only those snps which are present in >=min_count samples
-    and have no more than max_state bases at a given position
-    :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
-    :param min_count: int
-    :param max_states: int
-    :return: dict
-    '''
-    filtered = {}
-    for chrom in snp_data:
-        filtered[chrom] = {}
-        for pos in snp_data[chrom]:
-            for base in snp_data[chrom][pos]:
-                if snp_data[chrom][pos][base]['is_canonical']:
-                    if snp_data[chrom][pos][base]['num_members'] >= min_count:
-                        if not pos in filtered[chrom]:
-                            filtered[chrom][pos] = {}
-                        filtered[chrom][pos][base] = snp_data[chrom][pos][base]
-            if pos in filtered[chrom] and len(filtered[chrom][pos]) > max_states:
-                del (filtered[chrom][pos])
-
-    return filtered
 
 
 def get_valid_nodes(snp_data, min_snp_count):
@@ -338,7 +550,7 @@ def get_valid_nodes(snp_data, min_snp_count):
         for pos in snp_data[chrom]:
             for base in snp_data[chrom][pos]:
                 if snp_data[chrom][pos][base]['is_canonical']:
-                    clade_id = snp_data[chrom][pos][base]['clade_id']
+                    clade_id = snp_data[chrom][pos][base]['clade_id'].split('.')[-1]
 
                     if not clade_id in nodes:
                         nodes[clade_id] = {
@@ -374,478 +586,539 @@ def get_valid_nodes(snp_data, min_snp_count):
     return filtered
 
 
-def calc_node_distances(clade_data, ete_tree_obj):
+def snp_based_filter(snp_data, min_count, max_states):
     '''
-    Accepts a dict of clade_data and for each node calculates the distance of all leaves to the node
-    :param clade_data: dict clade data structure of tree nodes
-    :param ete_tree_obj: ETE3 tree obj
-    :return: dict filtered clade data structure
-    '''
-    node_cache = ete_tree_obj.get_cached_content()
-
-    for node_id in ete_tree_obj.traverse():
-        clade_id = node_id.name
-        if clade_id not in clade_data:
-            continue
-        node_members = list(node_cache[node_id])
-        distances = []
-        for leaf in node_members:
-            dist = node_id.get_distance(leaf)
-            distances.append(dist)
-        min_dist = 0
-        max_dist = 0
-        ave_dist = 0
-        if len(distances) > 0:
-            min_dist = min(distances)
-            max_dist = max(distances)
-            ave_dist = mean(distances)
-        clade_data[clade_id]['min_dist'] = min_dist
-        clade_data[clade_id]['max_dist'] = max_dist
-        clade_data[clade_id]['ave_dist'] = ave_dist
-
-    return clade_data
-
-
-def calc_node_associations(metadata, clade_data, ete_tree_obj):
-    '''
-    :param metadata:
-    :param clade_data:
-    :param ete_tree_obj:
-    :return:
-    '''
-    samples = set(metadata.keys())
-    num_samples = len(samples)
-    for clade_id in clade_data:
-        node = ete_tree_obj.search_nodes(name=clade_id)[0]
-        in_members = set(node.get_leaf_names())
-        features = {}
-        genotype_assignments = []
-        metadata_labels = {}
-        ftest = {}
-        metadata_counts = {}
-        for sample_id in samples:
-            if sample_id in in_members:
-                genotype_assignments.append(1)
-            else:
-                genotype_assignments.append(0)
-            for field_id in metadata[sample_id]:
-                value = metadata[sample_id][field_id]
-                if not field_id in metadata_labels:
-                    metadata_counts[field_id] = {}
-                    metadata_labels[field_id] = []
-                    ftest[field_id] = {}
-                if not value in ftest[field_id]:
-                    metadata_counts[field_id][value] = 0
-                    ftest[field_id][value] = {
-                        'pos-pos': set(),
-                        'pos-neg': set(),
-                        'neg-pos': set(),
-                        'neg-neg': set()
-                    }
-                metadata_counts[field_id][value] += 1
-                if sample_id in in_members:
-                    ftest[field_id][value]['pos-pos'].add(sample_id)
-                else:
-                    ftest[field_id][value]['neg-pos'].add(sample_id)
-
-                metadata_labels[field_id].append(value)
-                if not field_id in features:
-                    features[field_id] = {}
-
-                if not value in features[field_id]:
-                    features[field_id][value] = 0
-                if sample_id in in_members:
-                    features[field_id][value] += 1
-
-        for field_id in metadata_labels:
-            category_1 = []
-            category_2 = []
-            for idx, value in enumerate(metadata_labels[field_id]):
-                if isinstance(value,float):
-                    if math.isnan(value):
-                        continue
-                value = str(value)
-                if len(value) == 0 or value == 'nan':
-                    continue
-                category_1.append(genotype_assignments[idx])
-                category_2.append(metadata_counts[field_id][value])
-
-            clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
-            clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
-            clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
-            clade_data[clade_id]['fisher'][field_id] = {}
-
-            for value in ftest[field_id]:
-                ftest[field_id][value]['neg-neg'] = (
-                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
-                ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
-                table = [
-                    [len(ftest[field_id][value]['pos-pos']),
-                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
-                    [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
-                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
-                ]
-                oddsr, p = fisher_exact(table, alternative='greater')
-                clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
-
-    return clade_data
-
-def calc_node_associations_groups(metadata, clade_data, group_data):
-    '''
-    :param metadata:
-    :param clade_data:
-    :param ete_tree_obj:
-    :return:
-    '''
-    samples = set(metadata.keys())
-    num_samples = len(samples)
-    for clade_id in group_data['genotypes']:
-        in_members = group_data['genotypes'][clade_id]
-        features = {}
-        genotype_assignments = []
-        metadata_labels = {}
-        ftest = {}
-        metadata_counts = {}
-        for sample_id in samples:
-            if sample_id in in_members:
-                genotype_assignments.append(1)
-            else:
-                genotype_assignments.append(0)
-            for field_id in metadata[sample_id]:
-                value = metadata[sample_id][field_id]
-                if not field_id in metadata_labels:
-                    metadata_counts[field_id] = {}
-                    metadata_labels[field_id] = []
-                    ftest[field_id] = {}
-                if not value in ftest[field_id]:
-                    metadata_counts[field_id][value] = 0
-                    ftest[field_id][value] = {
-                        'pos-pos': set(),
-                        'pos-neg': set(),
-                        'neg-pos': set(),
-                        'neg-neg': set()
-                    }
-                metadata_counts[field_id][value] += 1
-                if sample_id in in_members:
-                    ftest[field_id][value]['pos-pos'].add(sample_id)
-                else:
-                    ftest[field_id][value]['neg-pos'].add(sample_id)
-
-                metadata_labels[field_id].append(value)
-                if not field_id in features:
-                    features[field_id] = {}
-
-                if not value in features[field_id]:
-                    features[field_id][value] = 0
-                if sample_id in in_members:
-                    features[field_id][value] += 1
-
-        for field_id in metadata_labels:
-            category_1 = []
-            category_2 = []
-            for idx, value in enumerate(metadata_labels[field_id]):
-                if isinstance(value,float):
-                    if math.isnan(value):
-                        continue
-                value = str(value)
-                if len(value) == 0 or value == 'nan':
-                    continue
-                category_1.append(genotype_assignments[idx])
-                category_2.append(metadata_counts[field_id][value])
-
-            clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
-            clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
-            clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
-            clade_data[clade_id]['fisher'][field_id] = {}
-
-            for value in ftest[field_id]:
-                ftest[field_id][value]['neg-neg'] = (
-                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
-                ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
-                table = [
-                    [len(ftest[field_id][value]['pos-pos']),
-                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
-                    [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
-                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
-                ]
-                oddsr, p = fisher_exact(table, alternative='greater')
-                clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
-
-    return clade_data
-
-
-
-
-def sample_dist_summary(distances, num_bins=25):
-    '''
-    Divides the distances into equal sized bins
-    :param distances: list of distances between nodes
+    Accepts a snp_data dict and filters the dictionary to return only those snps which are present in >=min_count samples
+    and have no more than max_state bases at a given position
+    :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
+    :param min_count: int
+    :param max_states: int
     :return: dict
     '''
-    df = pd.DataFrame(distances, columns=['dist'])
-    qcut_series, qcut_intervals = pd.qcut(df['dist'], q=num_bins, retbins=True, duplicates='drop')
-    tmp = pd.DataFrame(qcut_series.value_counts(sort=True))
-    tmp = tmp.sort_index()
-    tmp.reset_index(inplace=True)
-    tmp = tmp.rename(columns={"index": "interval", "dist": "count"})
-    return {'summary': df.describe().to_dict(), 'results': tmp, 'intervals': qcut_intervals}
+    filtered = {}
+    for chrom in snp_data:
+        filtered[chrom] = {}
+        for pos in snp_data[chrom]:
+            for base in snp_data[chrom][pos]:
+                if snp_data[chrom][pos][base]['is_canonical']:
+                    if snp_data[chrom][pos][base]['num_members'] >= min_count:
+                        if not pos in filtered[chrom]:
+                            filtered[chrom][pos] = {}
+                        filtered[chrom][pos][base] = snp_data[chrom][pos][base]
+            if pos in filtered[chrom] and len(filtered[chrom][pos]) > max_states:
+                del (filtered[chrom][pos])
+
+    return filtered
 
 
-def find_dist_peaks(values):
+def write_snp_report(snp_data, outfile):
     '''
-    :param values: list
+    Accepts snp_data dict data structure and writes snp details
+    :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
+    :param outfile: str
     :return:
     '''
-    return (find_peaks(np.array(values)))
+    fh = open(outfile, 'w')
+    fh.write("chrom\tpos\tbase\tclade_id\tis_canonical\tnum_clade_members\tnum_members\tis_ref\toddsr\tp_value\n")
+    for chrom in snp_data:
+        for pos in snp_data[chrom]:
+            for base in snp_data[chrom][pos]:
+                row = [chrom, pos, base,
+                       snp_data[chrom][pos][base]['clade_id'],
+                       snp_data[chrom][pos][base]['is_canonical'],
+                       snp_data[chrom][pos][base]['num_clade_members'],
+                       snp_data[chrom][pos][base]['num_members'],
+                       snp_data[chrom][pos][base]['is_ref'],
+                       snp_data[chrom][pos][base]['oddsr'],
+                       snp_data[chrom][pos][base]['p_value']]
+                fh.write("{}\n".format("\t".join([str(x) for x in row])))
+    fh.close()
+    return
 
 
-def find_dist_troughs(values):
+def parse_group_file(file, delim=None):
     '''
-    :param values: list
-    :return:
-    '''
-    return (find_peaks(-np.array(values)))
 
-
-def node_list_attr(clade_data, attribute):
-    '''
     Parameters
     ----------
-    clade_data
-    attribute
-    Returns
+    file: TSV file which contains two columns [sample_id, genotype]
+    delim: character to split genotypes into levels
+
+    Returns dict of all of the clade memberships in the file
     -------
+
     '''
-    values = []
-    for clade_id in clade_data:
-        value = clade_data[clade_id][attribute]
-        if isinstance(value, list):
-            value = len(value)
-        values.append(value)
-    return values
+    df = pd.read_csv(file, sep="\t", header=0)
+    df = df.astype(str)
+    groups = {}
+    genotypes = df['genotype'].tolist()
+
+    # Determine delimiter
+    if delim == None:
+        delim_counts = {
+            '-': 0,
+            ':': 0,
+            ';': 0,
+            '.': 0,
+            '/': 0,
+            '|': 0,
+            ',': 0,
+            ' ': 0,
+        }
+        for genotype in genotypes:
+            for d in delim_counts:
+                delim_counts[d] += genotype.count(d)
+        delim = max(delim_counts, key=delim_counts.get)
+
+    valid_nodes = set()
+    # Build genotype lookup
+    for genotype in genotypes:
+        genotype = genotype.split(delim)
+        for node_id in [str(x) for x in genotype]:
+            valid_nodes.add(node_id)
+        for i in range(1, len(genotype) + 1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g] = set()
+
+    sample_map = {}
+    # Add sample to each genotype
+    for row in df.itertuples():
+        sample_id = row.sample_id
+        sample_map[row.index] = {'sample_id': sample_id, 'genotype': row.genotype}
+        genotype = row.genotype.split(delim)
+        for i in range(1, len(genotype) + 1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g].add(row.index)
+
+    return {'delimeter': delim, 'sample_map': sample_map, 'membership': groups,
+            'genotypes': set(df['genotype'].tolist()), 'valid_nodes': valid_nodes}
 
 
-def temporal_signal(metadata, clade_data, ete_tree_obj, rcor_thresh):
+def get_tree_genotypes(tree):
     '''
+    Accepts a ETE3 tree object and returns the heirarchal node id's for every leaf
+    :param tree: ETE3 tree object
+    :return: dict of leaf names and list of node heirarchy
+    '''
+    samples = tree.get_leaf_names()
+    geno = {}
+    for sample_id in samples:
+        geno[sample_id] = []
+    for node in tree.traverse("preorder"):
+        node_id = node.name
+        if node.is_leaf():
+            continue
+        leaves = node.get_leaf_names()
+        for sample_id in leaves:
+            geno[sample_id].append(node_id)
+
+    return geno
+
+
+def parse_tree_groups(ete_tree_obj, delim='.'):
+    '''
+
     Parameters
     ----------
-    metadata
-    clade_data
-    ete_tree_obj
-    rcor_thresh
-    Returns
+    ete_tree_obj: ETE3 tree object
+    delim: character to split genotypes into levels
+
+    Returns dict of all of the clade memberships in the file
     -------
+
     '''
-    for clade_id in clade_data:
-        node = ete_tree_obj.search_nodes(name=clade_id)[0]
-        in_members = set(node.get_leaf_names())
-        distances = []
-        years = []
-        for sample_id in in_members:
-            value = metadata[sample_id]['year']
-            if value == 'nan' or len(value) == 0:
+    genotypes = get_tree_genotypes(ete_tree_obj)
+
+    id = 0
+    sample_map = {}
+    groups = {}
+    unique_genotypes = set()
+    valid_nodes = set()
+    for sample_id in genotypes:
+        genotype = "{}".format(delim).join(genotypes[sample_id])
+        unique_genotypes.add(genotype)
+        sample_map[id] = {'sample_id': sample_id, 'genotype': genotype}
+        genotype = genotype.split(delim)
+        for node_id in [str(x) for x in genotype]:
+            valid_nodes.add(node_id)
+        for i in range(1, len(genotype) + 1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g] = set()
+        id += 1
+
+    # Add sample to each genotype
+    for id in sample_map:
+        genotype = sample_map[id]['genotype'].split(delim)
+        for i in range(1, len(genotype) + 1):
+            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
+            groups[g].add(id)
+
+    return {'delimeter': delim, 'sample_map': sample_map, 'membership': groups,
+            'genotypes': unique_genotypes, 'valid_nodes': valid_nodes}
+
+
+def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group_membership, is_ref):
+    num_members = len(snp_members)
+    all_samples = all_samples - ambig_members
+    snp_members = snp_members - ambig_members
+    best_oddsr = 0
+    best_p = 1
+    best_clade_id = -1
+    best_clade_num = 0
+    is_canonical = False
+
+    for clade_id in group_membership:
+        if is_canonical:
+            break
+        clade_members = group_membership[clade_id] - ambig_members
+        pos_pos = snp_members & clade_members
+        neg_pos = clade_members - snp_members
+        num_pos_pos = len(pos_pos)
+
+        # Heuristic to skip poor quality comparisons
+        if num_pos_pos == 0 or num_pos_pos / num_members < 0.5:
+            continue
+
+        pos_neg = snp_members - clade_members
+        neg_neg = all_samples - snp_members - clade_members
+
+        table = [[num_pos_pos, len(pos_neg | neg_neg)],
+                 [len(neg_pos | pos_pos), len(neg_neg | pos_pos)]
+                 ]
+
+        oddsr, p = fisher_exact(table, alternative='greater')
+
+        if oddsr > best_oddsr or p < best_p:
+            best_clade_id = clade_id
+            best_clade_num = len(group_membership[clade_id])
+            best_p = p
+            best_oddsr = oddsr
+            num_clade_members = num_pos_pos
+
+        if len(pos_neg) == 0 and len(neg_pos) == 0:
+            is_canonical = True
+            best_clade_id = clade_id
+            best_clade_num = len(group_membership[clade_id])
+            best_p = p
+            best_oddsr = oddsr
+            num_clade_members = num_pos_pos
+
+    return {'chrom': chrom, 'pos': pos, 'base': base,
+            'clade_id': best_clade_id, 'is_canonical': is_canonical,
+            'num_clade_members': num_clade_members, 'num_members': best_clade_num, 'is_ref': is_ref,
+            'oddsr': best_oddsr, 'p_value': best_p}
+
+
+@ray.remote
+def snp_search(group_data, vcf_file, assigned_row, offset=0):
+    '''
+    Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree
+    :param ete_tree_obj: ETE3 tree object
+    :param vcf_file: str path to vcf or tsv snp data
+    :return: dict of snp_data data structure
+    '''
+    vcf = vcfReader(vcf_file)
+    data = vcf.process_row()
+    samples = vcf.samples
+    snps = {}
+    count_snps = 0
+    if data is not None:
+        count_snps += 1
+
+    sample_map = group_data['sample_map']
+    sample_id_lookup = {}
+    for id in sample_map:
+        sample_id_lookup[sample_map[id]['sample_id']] = id
+
+    all_samples = set(sample_map.keys())
+    group_membership = group_data['membership']
+    id = 0
+
+    while data is not None:
+        if id == assigned_row:
+            chrom = data['#CHROM']
+            pos = int(data['POS']) - 1
+            if not chrom in snps:
+                snps[chrom] = {}
+            snps[chrom][pos] = {}
+            assignments = {}
+            for sample_id in samples:
+                base = data[sample_id]
+                if not base in assignments:
+                    assignments[base] = []
+                assignments[base].append(sample_id_lookup[sample_id])
+
+            ambig_members = set()
+            if 'N' in assignments or '-' in assignments:
+                if 'N' in assignments:
+                    ambig_members = ambig_members | set(assignments['-']) | set(assignments['N'])
+            for base in assignments:
+                if not base in ['A', 'T', 'C', 'G']:
+                    continue
+                in_samples = set(assignments[base])
+                is_ref = base == data['REF']
+                snps[chrom][pos][base] = process_snp(chrom, pos, base, all_samples, in_samples, ambig_members,
+                                                     group_membership, is_ref)
+            assigned_row += offset
+        data = vcf.process_row()
+        id += 1
+
+    return snps
+
+
+def snp_search_controller(group_data, vcf_file, n_threads=1):
+    offsets = range(1, n_threads + 1)
+    starts = range(0, n_threads)
+    result_ids = []
+    for idx, value in enumerate(offsets):
+        offset = value
+        assigned_row = starts[idx]
+        result_ids.append(
+            snp_search.remote(group_data, vcf_file, assigned_row, offset))
+
+    results = ray.get(result_ids)
+    snps = {}
+    for i in range(0, len(results)):
+        result = results[i]
+        for chrom in result:
+            if not chrom in snps:
+                snps[chrom] = {}
+            for pos in result[chrom]:
+                if not pos in snps[chrom]:
+                    snps[chrom][pos] = {}
+                for base in result[chrom][pos]:
+                    snps[chrom][pos][base] = result[chrom][pos][base]
+
+    return snps
+
+
+@ray.remote
+def process_snp_bck(chrom, pos, base, all_samples, snp_members, ambig_members, group_membership, is_ref):
+    all_samples = all_samples - ambig_members
+    snp_members = snp_members - ambig_members
+    best_oddsr = 0
+    best_p = 1
+    best_clade_id = -1
+    best_clade_num = 0
+    is_canonical = False
+    for clade_id in group_membership:
+        clade_members = group_membership[clade_id] - ambig_members
+        pos_pos = snp_members & clade_members
+        pos_neg = snp_members - clade_members
+        neg_pos = clade_members - snp_members
+        neg_neg = all_samples - snp_members - clade_members
+
+        table = [[len(pos_pos), len(pos_neg | neg_neg)],
+                 [len(neg_pos | pos_pos), len(neg_neg | pos_pos)]
+                 ]
+        oddsr, p = fisher_exact(table, alternative='greater')
+        if oddsr > best_oddsr and p < best_p:
+            best_clade_id = clade_id
+            best_clade_num = len(group_membership[clade_id])
+            best_p = p
+            best_oddsr = oddsr
+            if len(pos_neg) == 0 and len(neg_pos) == 0:
+                is_canonical = True
+        if is_canonical:
+            break
+
+    return {'chrom': chrom, 'pos': pos, 'base': base,
+            'clade_id': best_clade_id, 'is_canonical': is_canonical,
+            'num_clade_members': len(pos_pos), 'num_members': best_clade_num, 'is_ref': is_ref}
+
+
+def snp_search_controller_bck(group_data, vcf_file):
+    '''
+    Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree
+    :param ete_tree_obj: ETE3 tree object
+    :param vcf_file: str path to vcf or tsv snp data
+    :return: dict of snp_data data structure
+    '''
+    vcf = vcfReader(vcf_file)
+    data = vcf.process_row()
+    samples = vcf.samples
+    num_samples = len(samples)
+    snps = {}
+    count_snps = 0
+    if data is not None:
+        count_snps += 1
+
+    sample_map = group_data['sample_map']
+    sample_id_lookup = {}
+    for id in sample_map:
+        sample_id_lookup[sample_map[id]['sample_id']] = id
+
+    all_samples = set(sample_map.keys())
+    group_membership = ray.put(group_data['membership'])
+
+    result_ids = []
+    while data is not None:
+        chrom = data['#CHROM']
+        pos = int(data['POS']) - 1
+        if not chrom in snps:
+            snps[chrom] = {}
+        snps[chrom][pos] = {}
+        assignments = {}
+        for sample_id in samples:
+            base = data[sample_id]
+            if not base in assignments:
+                assignments[base] = []
+            assignments[base].append(sample_id_lookup[sample_id])
+
+        ambig_members = set()
+        if 'N' in assignments or '-' in assignments:
+            if 'N' in assignments:
+                ambig_members = ambig_members | set(assignments['-']) | set(assignments['N'])
+        for base in assignments:
+            if not base in ['A', 'T', 'C', 'G']:
                 continue
-            dist = node.get_distance(sample_id)
-            distances.append(dist)
+            in_samples = set(assignments[base])
+            is_ref = base == data['REF']
+            result_ids.append(
+                process_snp.remote(chrom, pos, base, all_samples, in_samples, ambig_members, group_membership, is_ref))
+        data = vcf.process_row()
 
-            years.append(int(float(metadata[sample_id]['year'])))
+    results = ray.get(result_ids)
+    for i in range(0, len(results)):
+        chrom = results[i]['chrom']
+        pos = results[i]['pos']
+        base = results[i]['base']
+        snps[chrom][pos][base] = results[i]
 
-        R = 0
-        P = 1
-        Rpear = 0
-        Ppear = 1
-        if len(np.asarray(years)) >= 2 and len(np.asarray(distances)) >= 2:
-            R, P = spearmanr(np.asarray(years), np.asarray(distances))
-            Rpear, Ppear = pearsonr(np.asarray(years), np.asarray(distances))
-        clade_data[clade_id]['spearmanr'] = R
-        clade_data[clade_id]['spearmanr_pvalue'] = P
-        clade_data[clade_id]['pearsonr'] = Rpear
-        clade_data[clade_id]['pearsonr_pvalue'] = Ppear
-        is_present = False
-        if clade_data[clade_id]['spearmanr'] > rcor_thresh or clade_data[clade_id]['pearsonr'] > rcor_thresh:
-            is_present = True
-        clade_data[clade_id]['is_temporal_signal_present'] = is_present
+    return snps
+
+
+def generate_genotypes(group_data, delim=None):
+    if delim == None:
+        delim = '.'
+
+    genotypes = {}
+    for id in group_data['sample_map']:
+        sample_id = group_data['sample_map'][id]['sample_id']
+        genotype = [str(x) for x in group_data['sample_map'][id]['genotype'].split(delim)]
+        filt_genotype = []
+        for i in range(0, len(genotype)):
+            node_id = genotype[i]
+            if node_id in group_data['valid_nodes']:
+                filt_genotype.append(node_id)
+        genotypes[sample_id] = "{}".format(delim).join(filt_genotype)
+    return genotypes
+
+
+def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states=6,
+                 min_member_count=1, ete_tree_obj=None, tree_file=None):
+    '''
+    Parameters
+    ----------
+    ete_tree_obj
+    tree_file
+    vcf_file
+    min_member_count
+    min_snp_count
+    max_states
+    outdir
+    Returns
+    -------
+    '''
+    delim = group_data['delimeter']
+    logging.info("Identifying canonical snps")
+    snps = snp_search_controller(group_data, vcf_file, n_threads=4)
+    write_snp_report(snps, os.path.join(outdir, "{}-snps.all.txt".format(prefix)))
+    snps = snp_based_filter(snps, min_member_count, max_states)
+    clade_data = get_valid_nodes(snps, min_snp_count)
+    group_data['valid_nodes'] = set(clade_data.keys())
+
+    logging.info("Writting genotypes with nodes filtered for SNP support")
+    genotypes = generate_genotypes(group_data, delim)
+    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.supported.txt".format(prefix)))
+
+    if ete_tree_obj is not None:
+        logging.info("Calculating pair-wise distances from nodes to leaves")
+        clade_data = calc_node_distances(clade_data, ete_tree_obj)
+        logging.info("Summarizing sample distances")
+        matrix_file = os.path.join(outdir, "samples.dists.matrix.csv")
+        tree_to_distance_matrix(tree_file, matrix_file)
+        sample_dists = get_pairwise_distances_from_matrix(matrix_file)
+        max_bins = 100
+        dist_summary = sample_dist_summary(sample_dists, num_bins=max_bins)
+        nomenclature_dist_ranges = [
+            (dist_summary['summary']['dist']['min'], dist_summary['summary']['dist']['25%'] / 2),
+            (dist_summary['summary']['dist']['25%'] / 2, dist_summary['summary']['dist']['25%']),
+            (dist_summary['summary']['dist']['25%'], dist_summary['summary']['dist']['25%'] +
+             dist_summary['summary']['dist']['50%'] / 2),
+            (dist_summary['summary']['dist']['25%'] +
+             dist_summary['summary']['dist']['50%'] / 2, dist_summary['summary']['dist']['50%']),
+            (dist_summary['summary']['dist']['50%'],
+             dist_summary['summary']['dist']['50%'] + dist_summary['summary']['dist']['75%'] / 2),
+            (dist_summary['summary']['dist']['50%'] + dist_summary['summary']['dist']['75%'] / 2,
+             dist_summary['summary']['dist']['75%']),
+            (dist_summary['summary']['dist']['75%'],
+             dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max'] / 2),
+            (dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max'] / 2,
+             dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max']),
+        ]
+
+        pruned_tree, valid_nodes = prune_tree(ete_tree_obj, list(group_data['valid_nodes']))
+        candidate_nodes = select_nodes(clade_data, nomenclature_dist_ranges)
+        bifurcating_nodes = set(select_bifucating_nodes(pruned_tree, clade_data))
+        valid_nodes = sorted(list(create_compressed_hierarchy(ete_tree_obj, candidate_nodes) | bifurcating_nodes))
+        group_data['valid_nodes'] = set(valid_nodes)
+        genotypes = generate_genotypes(group_data, delim)
+        terminal_nodes = {}
+        for sample_id in genotypes:
+            node_id = genotypes[sample_id].split(delim)[-1]
+            if not node_id in terminal_nodes:
+                terminal_nodes[node_id] = 0
+            terminal_nodes[node_id] += 1
+
+        valid_nodes = set('0')
+        for node_id in terminal_nodes:
+            if terminal_nodes[node_id] >= min_member_count:
+                valid_nodes.add(node_id)
+
+        group_data['valid_nodes'] = valid_nodes
+
+        interval_labels = []
+        for i in dist_summary['results']['interval'].tolist():
+            interval_labels.append("[{}, {})".format(i.left, i.right))
+        fig = plot_bar(interval_labels, dist_summary['results']['count'].tolist())
+
+        fig.update_layout(xaxis_title="SNP distance (Hamming)", yaxis_title="Count")
+        if fig is not None:
+            fig.update_layout(xaxis_title="Intra-clade sample distance", yaxis_title="Count")
+            fig = fig.to_html()
+            fh = open(os.path.join(outdir, "{}-clade.snp.histo.html".format(prefix)), 'w')
+            fh.write(fig)
+            fh.close()
+
+    logging.info("Writting selected genotype partitions")
+    genotypes = generate_genotypes(group_data, delim)
+    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))
+
+    logging.info("Summarizing node snp support")
+    node_snp_counts = node_list_attr(clade_data, 'pos')
+
+    if len(set(node_snp_counts)) > 1:
+        node_snp_summary = sample_dist_summary(node_snp_counts)
+        interval_labels = []
+        for i in node_snp_summary['results']['interval'].tolist():
+            interval_labels.append("[{}, {})".format(i.left, i.right))
+        fig = plot_bar(interval_labels, node_snp_summary['results']['count'].tolist())
+
+        if fig is not None:
+            fig.update_layout(xaxis_title="SNP distance (Hamming)", yaxis_title="Count")
+            fig = fig.to_html()
+            fh = open(os.path.join(outdir, "{}-clade.snp.histo.html".format(prefix)), 'w')
+            fh.write(fig)
+            fh.close()
+
+    for clade_id in clade_data:
+        clade_data[clade_id]['is_selected'] = False
+        if clade_id in valid_nodes:
+            clade_data[clade_id]['is_selected'] = True
+
     return clade_data
 
-
-
-def as_range(values):
-    '''
-    Parameters
-    ----------
-    values list of integers
-    Returns list of tuples with the start and end index of each range
-    -------
-    '''
-    values = sorted(values)
-    num_val = len(values)
-    if num_val == 0:
-        return []
-    if num_val == 1:
-        return [(0, 0)]
-    ranges = []
-    i = 0
-    while i < num_val - 1:
-
-        s = i
-        for k in range(i + 1, num_val):
-            if values[k] - values[i] != 1:
-                i += 1
-                break
-            i += 1
-        if values[k] - values[i] > 1:
-            ranges.append((s, k - 1))
-        else:
-            if k == num_val - 1:
-                ranges.append((s, k))
-            else:
-                ranges.append((s, k - 1))
-    return ranges
-
-
-def get_nomenclature_ranges(counts):
-    '''
-    Parameters
-    ----------
-    counts: list of frequencies
-    Returns list of tuples of compressed ranges
-    -------
-    '''
-    (troughs, _) = find_dist_troughs(counts)
-    troughs = list(troughs)
-    min_value = min(counts)
-    for i, value in enumerate(counts):
-        if value == min_value:
-            troughs.append(i)
-    troughs = sorted(list(set(troughs)))
-    c = as_range(troughs)
-    ranges = []
-    for idx, tuple in enumerate(c):
-        ranges.append((troughs[tuple[0]], troughs[tuple[1]]))
-
-    return ranges
-
-
-def select_nodes(clade_data, dist_ranges, min_count=1):
-    '''
-    Parameters
-    ----------
-    clade_data
-    dist_ranges
-    min_count
-    Returns
-    -------
-    '''
-    num_ranks = len(dist_ranges)
-    candidate_nodes = []
-    for i in range(0, num_ranks):
-        candidate_nodes.append([])
-    candidate_nodes[-1].append('0')
-    for clade_id in clade_data:
-
-        if len(clade_data[clade_id]['chr']) < min_count:
-            continue
-        ave_dist = clade_data[clade_id]['ave_dist']
-
-        for i, tuple in enumerate(dist_ranges):
-            s = tuple[0]
-            e = tuple[1]
-            if ave_dist >= s and ave_dist < e:
-                candidate_nodes[i].append(clade_id)
-
-    return candidate_nodes
-
-
-def select_bifucating_nodes(ete_tree_obj, clade_data):
-    '''
-    Parameters
-    ----------
-    ete_tree_obj
-    clade_data
-    Returns
-    -------
-    '''
-    bifurcating_nodes = []
-    for clade_id in clade_data:
-        children = ete_tree_obj.search_nodes(name=clade_id)[0].get_children()
-        node_count = 0
-        if clade_id in bifurcating_nodes:
-            continue
-        nodes = [clade_id]
-        for child in children:
-            if not child.is_leaf() and child.name in clade_data:
-                node_count += 1
-                nodes.append(child.name)
-        if node_count > 1:
-            bifurcating_nodes += nodes
-    return bifurcating_nodes
-
-
-def create_compressed_hierarchy(ete_tree_obj, selected_nodes):
-    '''
-    Parameters
-    ----------
-    ete_tree_obj
-    selected_nodes
-    Returns
-    -------
-    '''
-    selected_nodes.reverse()
-    sample_genotypes = generate_genotypes(ete_tree_obj)
-    valid_nodes = ['0']
-    filt_nodes = []
-    for idx, nodes in enumerate(selected_nodes):
-        for ni, node_id in enumerate(nodes):
-            valid_nodes.append(node_id)
-        if len(nodes) > 0:
-            filt_nodes.append(nodes)
-
-
-    for sample_id in sample_genotypes:
-
-        genotype = sample_genotypes[sample_id]
-        filt = []
-        for node_id in genotype:
-            if node_id in valid_nodes:
-                filt.append(node_id)
-
-        for idx, nodes in enumerate(filt_nodes):
-            ovl = set(nodes) & set(filt)
-            if len(ovl) > 1:
-                match = False
-                genotype = []
-                for i in range(0, len(filt)):
-                    node = filt[i]
-                    if node in ovl:
-                        if not match:
-                            genotype.append(node)
-                            match = True
-                            continue
-                    else:
-                        genotype.append(node)
-                filt = genotype
-        sample_genotypes[sample_id] = filt
-    valid_nodes = set(['0'])
-    terminal_nodes = set()
-    for sample_id in sample_genotypes:
-        valid_nodes = valid_nodes & set(sample_genotypes[sample_id])
-        terminal_nodes.add(sample_genotypes[sample_id][-1])
-    valid_nodes = valid_nodes | terminal_nodes
-    return valid_nodes
-
-
-def validate_file(file):
-    '''
-    Parameters
-    ----------
-    file
-    Returns
-    -------
-    '''
-    if os.path.isfile(file) and os.path.getsize(file) > 9:
-        return True
-    else:
-        return False
 
 
 def isint(str):
@@ -946,7 +1219,7 @@ def select_kmers(kmer_groups, clade_info, klen, min_kmers=1, max_kmers=100):
         conserved_ranges.append((conserved_positions[s], conserved_positions[e]))
 
     positions = clade_info['0']['pos']
-    for i in range(0,len(conserved_ranges)):
+    for i in range(0, len(conserved_ranges)):
         pos = conserved_ranges[i][0]
         if len(kmer_groups[pos]['kmers']) > 1:
             continue
@@ -1003,7 +1276,6 @@ def select_kmers(kmer_groups, clade_info, klen, min_kmers=1, max_kmers=100):
                     'out_group': out_group,
                     'in_group': in_group,
                 }
-
 
     group_map = {}
     for group_id in kmer_groups:
@@ -1079,13 +1351,10 @@ def minimize_kmers(selected_kmers, kmer_groups, clade_info, klen, min_kmers=1, m
             for base in selected_kmers[pos][group]:
                 selected_kmers[pos][group][base] = sorted(list(set(selected_kmers[pos][group][base]) & reduced_kset))
 
-
-
-
     return selected_kmers
 
 
-def kmer_worker(outdir, ref_seq, vcf_file, kLen, min_kmer_count, max_kmer_count,prefix, n_threads):
+def kmer_worker(outdir, ref_seq, vcf_file, kLen, min_kmer_count, max_kmer_count, prefix, n_threads):
     '''
     Parameters
     ----------
@@ -1121,535 +1390,15 @@ def kmer_worker(outdir, ref_seq, vcf_file, kLen, min_kmer_count, max_kmer_count,
     kmer_counf_df = kmer_counf_df[kmer_counf_df['count'] >= min_kmer_count]
     kmer_counf_df = kmer_counf_df[kmer_counf_df['count'] <= max_kmer_count]
     kmer_counf_df.reset_index(inplace=True)
-    logging.info(" {} kmers remain after count filter >= {}, <= {}".format(len(kmer_counf_df),min_kmer_count,max_kmer_count))
+    logging.info(
+        " {} kmers remain after count filter >= {}, <= {}".format(len(kmer_counf_df), min_kmer_count, max_kmer_count))
     seqKmers = kmer_counf_df['kmer'].to_dict()
     out_kmer_file = os.path.join(outdir, "{}-filt.kmers.txt".format(prefix))
     logging.info("Collecting k-mer position information")
     return SeqSearchController(seqKmers, pseudo_seq_file, out_kmer_file, n_threads)
 
 
-def clade_worker(ete_tree_obj, tree_file, vcf_file, metadata_file, min_snp_count, outdir, prefix,max_states=6,
-                 min_member_count=1, rcor_thresh=0.4):
-    '''
-    Parameters
-    ----------
-    ete_tree_obj
-    tree_file
-    vcf_file
-    min_member_count
-    min_snp_count
-    max_states
-    outdir
-    Returns
-    -------
-    '''
-    logging.info("Identifying canonical snps")
-    snps = identify_canonical_snps(ete_tree_obj, vcf_file, min_member_count)
-    write_snp_report(snps, os.path.join(outdir, "{}-snps.all.txt".format(prefix)))
-    snps = snp_based_filter(snps, min_member_count, max_states)
-    clade_data = get_valid_nodes(snps, min_snp_count)
-
-
-    pruned_tree, valid_nodes = prune_tree(ete_tree_obj, list(clade_data.keys()))
-
-    genotypes = generate_genotypes(pruned_tree)
-    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.supported.txt".format(prefix)), delimeter='.')
-
-    logging.info("Calculating pair-wise distances from nodes to leaves")
-    clade_data = calc_node_distances(clade_data, ete_tree_obj)
-
-
-    logging.info("Parsing sample metadata")
-    metadata = parse_metadata(metadata_file)
-
-    if len(metadata) > 0:
-        logging.info("Calculating metadata associations")
-        clade_data = calc_node_associations(metadata, clade_data, ete_tree_obj)
-
-        if 'year' in metadata[list(metadata.keys())[0]]:
-            logging.info("Calculating clade temporal signals")
-            clade_data = temporal_signal(metadata, clade_data, ete_tree_obj, rcor_thresh)
-
-        write_node_report(clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
-
-    logging.info("Summarizing sample distances")
-    matrix_file = os.path.join(outdir, "samples.dists.matrix.csv")
-    tree_to_distance_matrix(tree_file, matrix_file)
-    sample_dists = get_pairwise_distances_from_matrix(matrix_file)
-    max_bins = 100
-    dist_summary = sample_dist_summary(sample_dists, num_bins=max_bins)
-    nomenclature_dist_ranges = [
-        (dist_summary['summary']['dist']['min'], dist_summary['summary']['dist']['25%'] / 2),
-        (dist_summary['summary']['dist']['25%'] / 2, dist_summary['summary']['dist']['25%']),
-        (dist_summary['summary']['dist']['25%'], dist_summary['summary']['dist']['25%'] +
-         dist_summary['summary']['dist']['50%'] / 2),
-        (dist_summary['summary']['dist']['25%'] +
-         dist_summary['summary']['dist']['50%'] / 2, dist_summary['summary']['dist']['50%']),
-        (dist_summary['summary']['dist']['50%'],
-         dist_summary['summary']['dist']['50%'] + dist_summary['summary']['dist']['75%'] / 2),
-        (dist_summary['summary']['dist']['50%'] + dist_summary['summary']['dist']['75%'] / 2,
-         dist_summary['summary']['dist']['75%']),
-        (dist_summary['summary']['dist']['75%'],
-         dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max'] / 2),
-        (dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max'] / 2,
-         dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max']),
-    ]
-
-    genotypes = generate_genotypes(pruned_tree)
-    terminal_nodes = {}
-    for sample_id in genotypes:
-        node_id = genotypes[sample_id][-1]
-        if not node_id in terminal_nodes:
-            terminal_nodes[node_id] = 0
-        terminal_nodes[node_id] += 1
-
-
-    candidate_nodes = select_nodes(clade_data, nomenclature_dist_ranges)
-    bifurcating_nodes =  set(select_bifucating_nodes(pruned_tree, clade_data))
-    valid_nodes = sorted(list(create_compressed_hierarchy(ete_tree_obj, candidate_nodes) | bifurcating_nodes))
-
-    pruned_tree, valid_nodes = prune_tree(ete_tree_obj, valid_nodes)
-    genotypes = generate_genotypes(pruned_tree)
-    for sample_id in genotypes:
-        node_id = genotypes[sample_id][-1]
-        if not node_id in terminal_nodes:
-            terminal_nodes[node_id] = 0
-        terminal_nodes[node_id] += 1
-    valid_nodes = set('0')
-    for node_id in terminal_nodes:
-        if terminal_nodes[node_id] >= min_member_count:
-            valid_nodes.add(node_id)
-
-    pruned_tree, valid_nodes = prune_tree(ete_tree_obj, valid_nodes)
-    genotypes = generate_genotypes(pruned_tree)
-    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)), delimeter='.')
-
-    leaf_meta = {}
-    for sample_id in genotypes:
-        genotype = '.'.join(genotypes[sample_id])
-        leaf_meta[sample_id] = [genotype]
-        for field in metadata[sample_id]:
-            leaf_meta[sample_id].append(metadata[sample_id][field])
-
-    interval_labels = []
-    for i in dist_summary['results']['interval'].tolist():
-        interval_labels.append("[{}, {})".format(i.left, i.right))
-    fig = plot_bar(interval_labels, dist_summary['results']['count'].tolist())
-
-    fig.update_layout(xaxis_title="SNP distance (Hamming)", yaxis_title="Count")
-    if fig is not None:
-        fig.update_layout(xaxis_title="Intra-clade sample distance", yaxis_title="Count")
-        fig = fig.to_html()
-        fh = open(os.path.join(outdir, "{}-clade.snp.histo.html".format(prefix)), 'w')
-        fh.write(fig)
-        fh.close()
-
-    logging.info("Summarizing node snp support")
-    node_snp_counts = node_list_attr(clade_data, 'pos')
-
-    if len(set(node_snp_counts)) > 1:
-        node_snp_summary = sample_dist_summary(node_snp_counts)
-        interval_labels = []
-        for i in node_snp_summary['results']['interval'].tolist():
-            interval_labels.append("[{}, {})".format(i.left, i.right))
-        fig = plot_bar(interval_labels, node_snp_summary['results']['count'].tolist())
-
-        if fig is not None:
-            fig.update_layout(xaxis_title="SNP distance (Hamming)", yaxis_title="Count")
-            fig = fig.to_html()
-            fh = open(os.path.join(outdir, "{}-clade.snp.histo.html".format(prefix)), 'w')
-            fh.write(fig)
-            fh.close()
-    for clade_id in clade_data:
-        clade_data[clade_id]['is_selected'] = False
-        if clade_id in valid_nodes:
-            clade_data[clade_id]['is_selected'] = True
-
-    return clade_data
-
-def clade_worker_groups(group_data, vcf_file, metadata_file, min_snp_count, outdir, prefix,max_states=6,
-                 min_member_count=1, rcor_thresh=0.4):
-    '''
-    Parameters
-    ----------
-    ete_tree_obj
-    tree_file
-    vcf_file
-    min_member_count
-    min_snp_count
-    max_states
-    outdir
-    Returns
-    -------
-    '''
-    logging.info("Identifying canonical snps")
-    snps = identify_canonical_snps_groups(group_data, vcf_file)
-    write_snp_report(snps, os.path.join(outdir, "{}-snps.all.txt".format(prefix)))
-    snps = snp_based_filter(snps, min_member_count, max_states)
-    clade_data = get_valid_nodes(snps, min_snp_count)
-
-    logging.info("Parsing sample metadata")
-    metadata = parse_metadata(metadata_file)
-
-    if len(metadata) > 0:
-        logging.info("Calculating metadata associations")
-        clade_data = calc_node_associations_groups(metadata, clade_data, group_data)
-        write_node_report(clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
-
-    genotypes = {}
-    for genotype in group_data['heirarchy']:
-        samples = group_data['heirarchy'][genotype]
-        for sample_id in samples:
-            genotypes[sample_id] = genotype.split('.')
-
-    write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)), delimeter='.')
-
-    leaf_meta = {}
-    for sample_id in genotypes:
-        genotype = '.'.join(genotypes[sample_id])
-        leaf_meta[sample_id] = [genotype]
-        for field in metadata[sample_id]:
-            leaf_meta[sample_id].append(metadata[sample_id][field])
-
-
-
-    return clade_data
-
-
-
-def metadata_worker(metadata_file, clade_data, ete_tree_obj, outdir, prefix,rcor_thresh=0.2):
-    '''
-    Parameters
-    ----------
-    metadata_file
-    clade_data
-    ete_tree_obj
-    outdir
-    rcor_thresh
-    Returns
-    -------
-    '''
-    logging.info("Parsing sample metadata")
-    metadata = parse_metadata(metadata_file)
-
-    if len(metadata) > 0:
-        logging.info("Calculating metadata associations")
-        clade_data = calc_node_associations(metadata, clade_data, ete_tree_obj)
-
-        if 'year' in metadata[list(metadata.keys())[0]]:
-            logging.info("Calculating clade temporal signals")
-            clade_data = temporal_signal(metadata, clade_data, ete_tree_obj, rcor_thresh)
-
-        write_node_report(clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
-    return clade_data
-
-def find_overlaping_gene_feature(start,end,ref_info,ref_name):
-    cds_start = start
-    cds_end = end
-    if not ref_name in ref_info:
-        return None
-    for feat in ref_info[ref_name]['features']['CDS']:
-        positions = feat['positions']
-        gene_start = -1
-        gene_end = -1
-        for s, e in positions:
-            if gene_start == -1:
-                gene_start = s
-            if gene_end < e:
-                gene_end = e
-            if cds_start  >= s and cds_end  <= e:
-                return feat
-    return None
-
-def create_scheme_obj(header, selected_kmers, clade_info, sample_genotypes, kmer_rule_obj,ref_features={},trans_table=11):
-    '''
-    Parameters
-    ----------
-    header
-    selected_kmers
-    clade_info
-    sample_genotypes
-    ref_features
-    Returns
-    -------
-    '''
-
-    perf_annotation = True
-    ref_id = list(ref_features.keys())[0]
-    ref_seq = ''
-    if not 'features' in ref_features[ref_id]:
-        perf_annotation = False
-        ref_seq = ref_features[ref_id]
-    else:
-        ref_seq = ref_features[ref_id]['features']['source']
-
-    kmer_key = 0
-    unique_genotypes = set()
-    for sample_id in sample_genotypes:
-        genotype = '.'.join(sample_genotypes[sample_id])
-        if not genotype in unique_genotypes:
-            unique_genotypes.add(genotype)
-
-    node_members = {}
-    for genotype in unique_genotypes:
-        genotype = genotype.split('.')
-        num_genotypes = len(genotype)
-        for i in range(0, num_genotypes):
-            node_id = genotype[i]
-            if not node_id in node_members:
-                node_members[node_id] = ['.'.join(genotype)]
-            for k in range(i, num_genotypes):
-                g = '.'.join(genotype[0:k + 1])
-                node_members[node_id].append(g)
-    unique_genotypes = set()
-    for node_id in node_members:
-        unique_genotypes = unique_genotypes | set(node_members[node_id])
-
-    for node_id in node_members:
-        node_members[node_id] = sorted(list(set(node_members[node_id])))
-
-    num_genotypes = len(unique_genotypes)
-    scheme = []
-    max_entropy = -1
-    for pos in selected_kmers:
-        ref_base = ref_seq[pos]
-        bases = list(selected_kmers[pos].keys())
-        alt_bases = []
-        for b in bases:
-            if b == ref_base:
-                continue
-            alt_bases.append(b)
-
-        if len(alt_bases) == 0:
-            alt_bases = [ref_base]
-            #Skip positions where there are multiple kmers to represent a conserved kmer
-            if len(selected_kmers[pos][ref_base]) > 1:
-                continue
-        for i in range(0, len(alt_bases)):
-            alt_base = alt_bases[i]
-            mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
-            for k in range(0, len(bases)):
-                base = bases[k]
-                dna_name = "{}{}{}".format(ref_base, pos + 1, base)
-                for kIndex in selected_kmers[pos][base]:
-                    obj = {}
-                    for field_id in header:
-                        obj[field_id] = ''
-
-                    start = selected_kmers[pos][base][kIndex]['aStart']
-                    end = selected_kmers[pos][base][kIndex]['aEnd']
-                    if perf_annotation:
-                        gene_feature = find_overlaping_gene_feature(start, end, ref_features, ref_id)
-                    else:
-                        gene_feature = None
-                        gene_name = 'Intergenic'
-
-                    ref_var_aa = ''
-                    alt_var_aa = ''
-                    is_cds = False
-                    gene_name = ''
-                    is_silent = True
-                    aa_name = ''
-                    aa_var_start = -1
-                    if gene_feature is not None:
-                        is_cds = True
-                        gene_name = gene_feature['gene_name']
-                        positions = gene_feature['positions']
-                        gene_start = -1
-                        gene_end = -1
-                        for s, e in positions:
-                            if gene_start == -1:
-                                gene_start = s
-                                gene_end = e
-                            else:
-                                if gene_start > s:
-                                    gene_start = s
-                                if gene_end < e:
-                                    gene_end = e
-                        gene_seq = ref_seq[gene_start:gene_end + 1]
-                        rel_var_start = abs(start - gene_start)
-                        aa_var_start = int(rel_var_start / 3)
-                        codon_var_start = aa_var_start * 3
-                        codon_var_end = codon_var_start + 3
-                        ref_var_dna = gene_seq[codon_var_start:codon_var_end]
-                        ref_var_aa = str(Seq(ref_var_dna).translate(table=trans_table))
-                        mod_gene_seq = list(ref_seq[gene_start:gene_end + 1])
-                        mod_gene_seq[rel_var_start] = base
-                        alt_var_dna = ''.join(mod_gene_seq[codon_var_start:codon_var_end])
-                        alt_var_aa = str(Seq(alt_var_dna).translate(table=trans_table))
-                        aa_name = "{}{}{}".format(ref_var_aa,aa_var_start+1,alt_var_aa)
-                        if alt_var_aa != ref_var_aa:
-                            is_silent = False
-
-                    obj['key'] = kmer_key
-                    obj['mutation_key'] = mutation_key
-                    obj['dna_name'] = dna_name
-                    obj['variant_start'] = pos + 1
-                    obj['variant_end'] = pos + 1
-                    obj['kmer_start'] = selected_kmers[pos][base][kIndex]['aStart'] + 1
-                    obj['kmer_end'] = selected_kmers[pos][base][kIndex]['aEnd'] + 1
-                    obj['target_variant'] = base
-                    obj['target_variant_len'] = 1
-                    obj['mutation_type'] = 'snp'
-                    obj['ref_state'] = ref_base
-                    obj['alt_state'] = alt_base
-                    state = 'ref'
-                    if base == alt_base and base != ref_base:
-                        state = 'alt'
-                    obj['state'] = state
-                    obj['kseq'] = selected_kmers[pos][base][kIndex]['kseq']
-                    obj['klen'] = len(obj['kseq'])
-                    obj['homopolymer_len'] = calc_homopolymers(obj['kseq'])
-                    obj['is_ambig_ok'] = True
-                    obj['is_kmer_found'] = True
-                    obj['is_kmer_length_ok'] = True
-                    obj['is_kmer_unique'] = True
-                    obj['is_valid'] = True
-                    obj['kmer_entropy'] = -1
-                    obj['positive_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['positive_genotypes'])
-                    obj['partial_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['partial_genotypes'])
-                    obj['gene_name'] = gene_name
-                    if gene_feature is not None:
-                        obj['gene_start'] = gene_start+1
-                        obj['gene_end'] = gene_end+1
-                        obj['cds_start'] = codon_var_start+1
-                        obj['cds_end'] = codon_var_end
-                        obj['aa_name'] = aa_name
-                        obj['aa_start'] = aa_var_start + 1
-                        obj['aa_end'] = aa_var_start + 1
-
-
-                    obj['is_cds'] = is_cds
-                    obj['is_frame_shift'] = False
-                    obj['is_silent'] = is_silent
-
-                    is_found = False
-                    for clade_id in clade_info:
-                        if not clade_info[clade_id]['is_selected']:
-                            continue
-                        for idx, p in enumerate(clade_info[clade_id]['pos']):
-                            if pos != p:
-                                continue
-                            b = clade_info[clade_id]['bases'][idx]
-                            if b != base:
-                                continue
-                            if clade_id in node_members:
-                                counts = [0] * num_genotypes
-                                for k in range(0, len(node_members[clade_id])):
-                                    counts[k] += 1
-
-                                obj['kmer_entropy'] = calc_shanon_entropy(counts)
-                                if obj['kmer_entropy'] > max_entropy:
-                                    max_entropy = obj['kmer_entropy']
-                                is_found = True
-                                break
-                        if is_found:
-                            break
-                    scheme.append(obj)
-                    kmer_key += 1
-    for i in range(0, len(scheme)):
-        e = scheme[i]['kmer_entropy']
-        if e == -1:
-            scheme[i]['kmer_entropy'] = max_entropy
-
-    return scheme
-
-def construct_ruleset_bck(selected_kmers, genotype_map,outdir,prefix,min_perc):
-    kmer_rules = {}
-    for pos in selected_kmers:
-        for base in selected_kmers[pos]:
-            for kIndex in selected_kmers[pos][base]:
-                kseq = selected_kmers[pos][base][kIndex]['kseq']
-                kmer_rules[kseq] = {}
-
-    genotype_counts = {}
-    for sample_id in genotype_map:
-        genotype = genotype_map[sample_id].split('.')
-        query = []
-        for g in genotype:
-            query.append(g)
-            q = ".".join(query)
-            if not q in genotype_counts:
-                genotype_counts[q] = 0
-            genotype_counts[q]+=1
-
-
-    kmer_file = os.path.join(outdir, "{}-filt.kmers.txt".format(prefix))
-    fh = open(kmer_file,'r')
-    header = next(fh).split("\t")
-    for line in fh:
-        line = line.split("\t")
-        if len(line) != 5:
-            continue
-        kseq= line[3]
-        samples = line[4].split(',')
-        genotypes = {}
-        for sample_id in samples:
-            sample_id = sample_id.split("~")[0]
-            genotype = genotype_map[sample_id].split('.')
-            query = []
-            for g in genotype:
-                query.append(g)
-                q = ".".join(query)
-                if not q in genotypes:
-                    genotypes[q] = 0
-                genotypes[q] += 1
-
-        kmer_rules[kseq] = {'positive_genotypes':[],'partial_genotypes':[]}
-        for genotype in genotypes:
-            perc = genotypes[genotype] / genotype_counts[genotype]
-            if perc >= min_perc:
-                kmer_rules[kseq]['positive_genotypes'].append(genotype)
-            else:
-                kmer_rules[kseq]['partial_genotypes'].append(genotype)
-
-    return kmer_rules
-
-def construct_ruleset(selected_kmers, genotype_map,outdir,prefix,min_perc):
-    kmer_rules = {}
-    for pos in selected_kmers:
-        for base in selected_kmers[pos]:
-            for kIndex in selected_kmers[pos][base]:
-                kseq = selected_kmers[pos][base][kIndex]['kseq']
-                kmer_rules[kseq] = {}
-
-    genotype_counts = {}
-    for sample_id in genotype_map:
-        genotype = genotype_map[sample_id]
-        if not genotype in genotype_counts:
-            genotype_counts[genotype] = 0
-        genotype_counts[genotype] += 1
-
-
-    kmer_file = os.path.join(outdir, "{}-filt.kmers.txt".format(prefix))
-    fh = open(kmer_file,'r')
-    header = next(fh).split("\t")
-    for line in fh:
-        line = line.split("\t")
-        if len(line) != 5:
-            continue
-        kseq= line[3]
-        samples = line[4].split(',')
-        genotypes = {}
-        for sample_id in samples:
-            sample_id = sample_id.split("~")[0]
-            genotype = genotype_map[sample_id]
-            if not genotype in genotypes:
-                genotypes[genotype] = 0
-
-            genotypes[genotype] += 1
-
-        kmer_rules[kseq] = {'positive_genotypes':[],'partial_genotypes':[]}
-        for genotype in genotypes:
-            perc = genotypes[genotype] / genotype_counts[genotype]
-            if perc >= min_perc:
-                kmer_rules[kseq]['positive_genotypes'].append(genotype)
-            else:
-                kmer_rules[kseq]['partial_genotypes'].append(genotype)
-
-    return kmer_rules
-
-def call_consensus_snp_genotypes(ref_seq,vcf_file, genotype_map,outfile,min_perc=1):
+def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_perc=1):
     variants = get_variants(vcf_file)
     genotype_counts = {}
     genotype_members = {}
@@ -1658,16 +1407,16 @@ def call_consensus_snp_genotypes(ref_seq,vcf_file, genotype_map,outfile,min_perc
         if not genotype in genotype_counts:
             genotype_counts[genotype] = {}
             genotype_members[genotype] = 0
-        genotype_members[genotype]+=1
+        genotype_members[genotype] += 1
         for chrom in variants[sample_id]:
             for pos in variants[sample_id][chrom]:
-                base =  variants[sample_id][chrom][pos]
+                base = variants[sample_id][chrom][pos]
                 if not pos in genotype_counts[genotype]:
-                    genotype_counts[genotype][pos] = {'A':0,'T':0,'C':0,'G':0,'N':0}
+                    genotype_counts[genotype][pos] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0}
                 if not base in genotype_counts[genotype][pos]:
                     base = 'N'
-                genotype_counts[genotype][pos][base]+=1
-    fh = open(outfile,'w')
+                genotype_counts[genotype][pos][base] += 1
+    fh = open(outfile, 'w')
     chrom = list(ref_seq.keys())[0]
 
     for genotype in genotype_counts:
@@ -1677,58 +1426,226 @@ def call_consensus_snp_genotypes(ref_seq,vcf_file, genotype_map,outfile,min_perc
             b = max(genotype_counts[genotype][pos], key=genotype_counts[genotype][pos].get)
             value = genotype_counts[genotype][pos][b]
             if value / total >= min_perc:
-                seq[pos-1] = b
+                seq[pos - 1] = b
             else:
-                seq[pos-1] = 'N'
-        fh.write(">{}\n{}\n".format(genotype,"".join(seq)))
+                seq[pos - 1] = 'N'
+        fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
 
     return
 
 
-def parse_groups(file,delim=None):
-    df = pd.read_csv(file,sep="\t",header=0)
-    df = df.astype(str)
-    groups = {}
-    genotypes = df['genotype'].tolist()
+def as_range(values):
+    '''
+    Parameters
+    ----------
+    values list of integers
+    Returns list of tuples with the start and end index of each range
+    -------
+    '''
+    values = sorted(values)
+    num_val = len(values)
+    if num_val == 0:
+        return []
+    if num_val == 1:
+        return [(0, 0)]
+    ranges = []
+    i = 0
+    while i < num_val - 1:
 
-    #Determine delimiter
-    if delim == None:
-        delim_counts = {
-            '-':0,
-            ':':0,
-            ';':0,
-            '.':0,
-            '/':0,
-            '|':0,
-            ',':0,
-            ' ':0,
-        }
-        for genotype in genotypes:
-            for d in delim_counts:
-                delim_counts[d]+= genotype.count(d)
-        delim = max(delim_counts, key=delim_counts.get)
-
-    #Build genotype lookup
-    for genotype in genotypes:
-        genotype = genotype.split(delim)
-        for i in range(1,len(genotype)+1):
-            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
-            groups[g] = set()
-    print(groups)
-    #Add sample to each genotype
-    for row in df.itertuples():
-        sample_id = row.sample_id
-        genotype = row.genotype.split(delim)
-        for i in range(1,len(genotype)+1):
-            g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
-            groups[g].add(sample_id)
-
-    return {'sample_list':list(df['sample_id'].tolist()),'genotypes':groups,'heirarchy':set(df['genotype'].tolist())}
+        s = i
+        for k in range(i + 1, num_val):
+            if values[k] - values[i] != 1:
+                i += 1
+                break
+            i += 1
+        if values[k] - values[i] > 1:
+            ranges.append((s, k - 1))
+        else:
+            if k == num_val - 1:
+                ranges.append((s, k))
+            else:
+                ranges.append((s, k - 1))
+    return ranges
 
 
+def find_dist_peaks(values):
+    '''
+    :param values: list
+    :return:
+    '''
+    return (find_peaks(np.array(values)))
 
 
+def find_dist_troughs(values):
+    '''
+    :param values: list
+    :return:
+    '''
+    return (find_peaks(-np.array(values)))
 
+
+def get_nomenclature_ranges(counts):
+    '''
+    Parameters
+    ----------
+    counts: list of frequencies
+    Returns list of tuples of compressed ranges
+    -------
+    '''
+    (troughs, _) = find_dist_troughs(counts)
+    troughs = list(troughs)
+    min_value = min(counts)
+    for i, value in enumerate(counts):
+        if value == min_value:
+            troughs.append(i)
+    troughs = sorted(list(set(troughs)))
+    c = as_range(troughs)
+    ranges = []
+    for idx, tuple in enumerate(c):
+        ranges.append((troughs[tuple[0]], troughs[tuple[1]]))
+
+    return ranges
+
+
+def select_nodes(clade_data, dist_ranges, min_count=1):
+    '''
+    Parameters
+    ----------
+    clade_data
+    dist_ranges
+    min_count
+    Returns
+    -------
+    '''
+    num_ranks = len(dist_ranges)
+    candidate_nodes = []
+    for i in range(0, num_ranks):
+        candidate_nodes.append([])
+    candidate_nodes[-1].append('0')
+    for clade_id in clade_data:
+
+        if len(clade_data[clade_id]['chr']) < min_count:
+            continue
+        ave_dist = clade_data[clade_id]['ave_dist']
+
+        for i, tuple in enumerate(dist_ranges):
+            s = tuple[0]
+            e = tuple[1]
+            if ave_dist >= s and ave_dist < e:
+                candidate_nodes[i].append(clade_id)
+
+    return candidate_nodes
+
+def calc_node_associations_groups(metadata, clade_data, group_data):
+    '''
+    :param metadata:
+    :param clade_data:
+    :param ete_tree_obj:
+    :return:
+    '''
+
+    samples = set(metadata.keys())
+    num_samples = len(samples)
+    for clade_id in group_data['membership']:
+        in_members = group_data['membership'][clade_id]
+        features = {}
+        genotype_assignments = []
+        metadata_labels = {}
+        ftest = {}
+        metadata_counts = {}
+        for sample_id in samples:
+            if sample_id in in_members:
+                genotype_assignments.append(1)
+            else:
+                genotype_assignments.append(0)
+            for field_id in metadata[sample_id]:
+                value = metadata[sample_id][field_id]
+                if not field_id in metadata_labels:
+                    metadata_counts[field_id] = {}
+                    metadata_labels[field_id] = []
+                    ftest[field_id] = {}
+                if not value in ftest[field_id]:
+                    metadata_counts[field_id][value] = 0
+                    ftest[field_id][value] = {
+                        'pos-pos': set(),
+                        'pos-neg': set(),
+                        'neg-pos': set(),
+                        'neg-neg': set()
+                    }
+                metadata_counts[field_id][value] += 1
+                if sample_id in in_members:
+                    ftest[field_id][value]['pos-pos'].add(sample_id)
+                else:
+                    ftest[field_id][value]['neg-pos'].add(sample_id)
+
+                metadata_labels[field_id].append(value)
+                if not field_id in features:
+                    features[field_id] = {}
+
+                if not value in features[field_id]:
+                    features[field_id][value] = 0
+                if sample_id in in_members:
+                    features[field_id][value] += 1
+
+        for field_id in metadata_labels:
+            category_1 = []
+            category_2 = []
+            for idx, value in enumerate(metadata_labels[field_id]):
+                if isinstance(value,float):
+                    if math.isnan(value):
+                        continue
+                value = str(value)
+                if len(value) == 0 or value == 'nan':
+                    continue
+                category_1.append(genotype_assignments[idx])
+                category_2.append(metadata_counts[field_id][value])
+
+            clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
+            clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
+            clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
+            clade_data[clade_id]['fisher'][field_id] = {}
+
+            for value in ftest[field_id]:
+                ftest[field_id][value]['neg-neg'] = (
+                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
+                ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
+                table = [
+                    [len(ftest[field_id][value]['pos-pos']),
+                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
+                    [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
+                     len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
+                ]
+                oddsr, p = fisher_exact(table, alternative='greater')
+                clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
+
+    return clade_data
+
+def write_node_report(clade_data, outfile):
+    '''
+    Writes the Node information data to a tsv file
+    :param clade_data: dict Node information structure
+    :param outfile: str
+    :return:
+    '''
+    fh = open(outfile, 'w')
+    write_header = True
+    header = ['clade_id']
+    for clade_id in clade_data:
+        row = [clade_id]
+        for feat in clade_data[clade_id]:
+            if write_header:
+                header.append(feat)
+            value = clade_data[clade_id][feat]
+            if isinstance(value, list):
+                value = ";".join([str(x) for x in value])
+            row.append(value)
+        if write_header:
+            fh.write("{}\n".format("\t".join([str(x) for x in header])))
+            write_header = False
+        fh.write("{}\n".format("\t".join([str(x) for x in row])))
+    fh.close()
+
+    return
 
 def run():
     cmd_args = parse_args()
@@ -1753,7 +1670,7 @@ def run():
 
     logging = init_console_logger(3)
 
-    #Initialize Ray components
+    # Initialize Ray components
     os.environ['RAY_worker_register_timeout_seconds'] = '60'
     num_cpus = psutil.cpu_count(logical=False)
     if num_threads > num_cpus:
@@ -1762,7 +1679,7 @@ def run():
     if not ray.is_initialized():
         ray.init(ignore_reinit_error=True, num_cpus=num_threads)
 
-    #Initialize directory
+    # Initialize directory
     if not os.path.isdir(outdir):
         logging.info("Creating analysis directory {}".format(outdir))
         os.mkdir(outdir, 0o755)
@@ -1772,7 +1689,7 @@ def run():
         logging.info("Creating temporary analysis directory {}".format(analysis_dir))
         os.mkdir(analysis_dir, 0o755)
 
-    #Toggle tree based or group based identification
+    # Toggle tree based or group based identification
     if tree_file is not None:
         mode = 'tree'
         status = validate_file(tree_file)
@@ -1789,7 +1706,7 @@ def run():
         logging.error("You must specify either a tree file or group file")
         sys.exit()
 
-    #Validate input file presence
+    # Validate input file presence
     files = [variant_file, metadata_file, reference_file]
     for file in files:
         status = validate_file(file)
@@ -1797,7 +1714,7 @@ def run():
             logging.error("Error file {} either does not exist or is empty".format(file))
             sys.exit()
 
-    #Parse reference sequence
+    # Parse reference sequence
     if '.gbk' in reference_file or '.gb' in reference_file:
         seq_file_type = 'genbank'
     else:
@@ -1820,13 +1737,13 @@ def run():
     vcf_samples = set(vcfReader(variant_file).samples)
     metadata = parse_metadata(metadata_file)
 
-
     if mode == 'tree':
         if root_method is None and root_name is not None:
             root_method = 'outgroup'
 
         # validate samples present in all files match
-        ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True, ladderize=True,
+        ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True,
+                                  ladderize=True,
                                   method='midpoint')
         tree_samples = set(ete_tree_obj.get_leaf_names())
         if root_method == 'midpoint':
@@ -1839,8 +1756,7 @@ def run():
         if root_method == 'outgroup':
             ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True,
                                       ladderize=True,
-                                      method='outgroup',outgroup=root_name)
-
+                                      method='outgroup', outgroup=root_name)
 
         for sample_id in tree_samples:
             if isint(sample_id):
@@ -1851,16 +1767,17 @@ def run():
         num_samples = len(sample_set)
         missing_samples = sample_set - tree_samples
     else:
-        group_data = parse_groups(group_file,delim=delim )
+        group_data = parse_group_file(group_file, delim=delim)
         group_samples = set(group_data['sample_list'])
         sample_set = group_samples | vcf_samples | set(metadata.keys())
         num_samples = len(sample_set)
         missing_samples = sample_set - group_samples
 
-    #Validate Sample id's accross all inputs
+    # Validate Sample id's accross all inputs
     if len(missing_samples) > 0:
         logging.error(
-            "Error {} samples are not present in tree or genotype file: {}".format(len(missing_samples), ','.join(missing_samples)))
+            "Error {} samples are not present in tree or genotype file: {}".format(len(missing_samples),
+                                                                                   ','.join(missing_samples)))
         logging.error(
             "Missing samples present in Metadata file {} : {}".format(metadata_file,
                                                                       ','.join(set(metadata.keys()) & missing_samples)))
@@ -1886,18 +1803,13 @@ def run():
         sys.exit()
 
     if mode == 'tree':
-        genotypes = generate_genotypes(ete_tree_obj)
-        write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)), delimeter='.')
-        clade_data = clade_worker(ete_tree_obj, tree_file, variant_file, metadata_file, min_snp_count, outdir, prefix,
-                                  max_states,
-                                  min_member_count, rcor_thresh)
-        valid_nodes = set()
-        for clade_id in clade_data:
-            if clade_data[clade_id]['is_selected']:
-                valid_nodes.add(clade_id)
-
-        pruned_tree, valid_nodes = prune_tree(ete_tree_obj, valid_nodes)
-        genotypes = generate_genotypes(pruned_tree)
+        group_data = parse_tree_groups(ete_tree_obj)
+        clade_data = clade_worker(group_data, variant_file, min_snp_count, outdir, prefix, max_states=max_states,
+                                  min_member_count=min_member_count, ete_tree_obj=ete_tree_obj, tree_file=tree_file)
+        valid_nodes = list(clade_data.keys())
+        group_data['valid_nodes'] = set(valid_nodes)
+        genotypes = generate_genotypes(group_data)
+        write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)))
 
         leaf_meta = {}
         for sample_id in genotypes:
@@ -1913,17 +1825,24 @@ def run():
         logging.info("Creating representative tree figure")
         plot_single_rep_tree(os.path.join(outdir, "{}-reducedtree.pdf".format(prefix)), m_ete_tree_obj, valid_nodes,
                              leaf_meta=leaf_meta, dpi=10000)
-        # Preserve the root
-        filt = {'0': clade_data['0']}
     else:
-        shutil.copyfile(group_file, os.path.join(outdir,"{}-genotypes.raw.txt".format(prefix)))
+        shutil.copyfile(group_file, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)))
+        group_data = parse_group_file(group_file)
+        clade_data = clade_worker(group_data, variant_file, min_snp_count, outdir, prefix, max_states=max_states,
+                                  min_member_count=min_member_count, ete_tree_obj=None, tree_file=None)
 
+    clade_data = calc_node_associations_groups(metadata, clade_data, group_data)
+
+    write_node_report(clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
 
     logging.info("Identifying genotyping kmers")
     kmer_groups = kmer_worker(outdir, ref_seq, variant_file, klen, min_member_count, num_samples, prefix, num_threads)
 
     selected_kmers = select_kmers(kmer_groups, clade_data, klen)
     valid_postions = set(selected_kmers.keys())
+
+    # Preserve the root
+    filt = {'0': clade_data['0']}
 
     if mode == 'tree':
         for clade_id in clade_data:
@@ -1946,19 +1865,21 @@ def run():
         clade_data = filt
 
     logging.info("Reading genotype assigments")
-    genotype_assignments = pd.read_csv(os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)),sep="\t",header=0).astype(str)
+    genotype_assignments = pd.read_csv(os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)), sep="\t",
+                                       header=0).astype(str)
     genotype_assignments = dict(zip(genotype_assignments['sample_id'], genotype_assignments['genotype']))
 
     logging.info("Constructing kmer rule set")
-    kmer_rule_obj = construct_ruleset(selected_kmers, genotype_assignments,outdir,prefix,min_perc)
+    kmer_rule_obj = construct_ruleset(selected_kmers, genotype_assignments, outdir, prefix, min_perc)
 
     logging.info("Creating scheme")
     if len(ref_features) > 0:
-        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, clade_data, genotypes, kmer_rule_obj,ref_features,)
+        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, clade_data, genotypes, kmer_rule_obj, ref_features, )
     else:
-        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, clade_data, genotypes, kmer_rule_obj,ref_seq)
+        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, clade_data, genotypes, kmer_rule_obj, ref_seq)
 
-    call_consensus_snp_genotypes(ref_seq, variant_file, genotype_assignments, os.path.join(outdir,"{}-genotype.consenus.fasta".format(prefix)), min_perc)
+    call_consensus_snp_genotypes(ref_seq, variant_file, genotype_assignments,
+                                 os.path.join(outdir, "{}-genotype.consenus.fasta".format(prefix)), min_perc)
 
     fh = open(os.path.join(outdir, "{}-scheme.txt".format(prefix)), 'w')
     fh.write("{}\n".format("\t".join(SCHEME_HEADER)))
@@ -1966,7 +1887,6 @@ def run():
         row = "\t".join([str(x) for x in list(scheme[i].values())])
         fh.write("{}\n".format(row))
     fh.close()
-
 
     if not keep_tmp:
         logging.info("Removing temporary analysis folder")
