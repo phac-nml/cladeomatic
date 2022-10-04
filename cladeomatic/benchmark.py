@@ -174,8 +174,6 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0,n_threads=1):
                     filt.append(result[sample_id]['predicted_genotype(s)'][i])
             result[sample_id]['predicted_genotype(s)'] = filt
 
-
-
     return result
 
 def run():

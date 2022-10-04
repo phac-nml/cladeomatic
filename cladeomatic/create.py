@@ -52,10 +52,13 @@ def parse_args():
                         default=None)
     parser.add_argument('--klen', type=int, required=False, help='kmer length', default=18)
     parser.add_argument('--min_members', type=int, required=False,
-                        help='Minimum number of members for a clade to be valid', default=2)
+                        help='Minimum number of members for a clade to be valid', default=10)
     parser.add_argument('--min_snp_count', type=int, required=False,
                         help='Minimum number of unique snps for a clade to be valid',
                         default=1)
+    parser.add_argument('--max_kmer_count', type=int, required=False,
+                        help='Maximum number of kmers to be selected for each genotype',
+                        default=-1)
     parser.add_argument('--min_perc', type=float, required=False,
                         help='Minimum percentage of clade members to be positive for a kmer to be valid', default=1)
     parser.add_argument('--max_states', type=int, required=False,
@@ -126,6 +129,8 @@ def create_scheme_obj(header, selected_kmers, clade_info, sample_genotypes, kmer
     num_genotypes = len(unique_genotypes)
     scheme = []
     max_entropy = -1
+    mutation_keys = {}
+
     for pos in selected_kmers:
         ref_base = ref_seq[pos]
         bases = list(selected_kmers[pos].keys())
@@ -224,6 +229,12 @@ def create_scheme_obj(header, selected_kmers, clade_info, sample_genotypes, kmer
                     obj['positive_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['positive_genotypes'])
                     obj['partial_genotypes'] = ",".join(kmer_rule_obj[obj['kseq']]['partial_genotypes'])
                     obj['gene_name'] = gene_name
+                    if not mutation_key in mutation_keys:
+                        mutation_keys[mutation_key] = {'alt':[],'ref':[]}
+
+                    if len(obj['positive_genotypes']) > 0:
+                        mutation_keys[mutation_key][state].append(obj['positive_genotypes'])
+
                     if gene_feature is not None:
                         obj['gene_start'] = gene_start + 1
                         obj['gene_end'] = gene_end + 1
@@ -261,11 +272,18 @@ def create_scheme_obj(header, selected_kmers, clade_info, sample_genotypes, kmer
                             break
                     scheme.append(obj)
                     kmer_key += 1
+    mutations_keys_to_remove = []
+    for mkey in mutation_keys:
+        if len(mutation_keys[mkey]['ref']) == 0 and len(mutation_keys[mkey]['alt']) == 0:
+            mutations_keys_to_remove.append(mkey)
+    filt = []
     for i in range(0, len(scheme)):
         e = scheme[i]['kmer_entropy']
         if e == -1:
             scheme[i]['kmer_entropy'] = max_entropy
-
+        if scheme[i]['mutation_key'] in mutations_keys_to_remove:
+            continue
+        filt.append(scheme[i])
     return scheme
 
 
@@ -382,6 +400,7 @@ def create_compressed_hierarchy(ete_tree_obj, selected_nodes):
             valid_nodes.append(node_id)
         if len(nodes) > 0:
             filt_nodes.append(nodes)
+
     for sample_id in sample_genotypes:
 
         genotype = sample_genotypes[sample_id]
@@ -413,7 +432,6 @@ def create_compressed_hierarchy(ete_tree_obj, selected_nodes):
         valid_nodes = valid_nodes | set(sample_genotypes[sample_id])
         terminal_nodes.add(sample_genotypes[sample_id][-1])
     valid_nodes = valid_nodes | terminal_nodes
-
     return valid_nodes
 
 
@@ -1061,8 +1079,10 @@ def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states
         pruned_tree, valid_nodes = prune_tree(ete_tree_obj, list(group_data['valid_nodes']))
         candidate_nodes = select_nodes(clade_data, nomenclature_dist_ranges)
         bifurcating_nodes = set(select_bifucating_nodes(pruned_tree, clade_data))
-        valid_nodes = sorted(list(create_compressed_hierarchy(ete_tree_obj, candidate_nodes) | bifurcating_nodes))
+        compressed_valid_nodes = create_compressed_hierarchy(ete_tree_obj, candidate_nodes)
+        valid_nodes = sorted( list(compressed_valid_nodes | bifurcating_nodes))
         group_data['valid_nodes'] = set(valid_nodes)
+
         genotypes = generate_genotypes(group_data, delim)
         terminal_nodes = {}
         for sample_id in genotypes:
@@ -1071,10 +1091,11 @@ def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states
                 terminal_nodes[node_id] = 0
             terminal_nodes[node_id] += 1
 
-        valid_nodes = set('0')
+        valid_nodes = set('0') | set(compressed_valid_nodes)
         for node_id in terminal_nodes:
-            if terminal_nodes[node_id] >= min_member_count:
+            if terminal_nodes[node_id] >= min_member_count :
                 valid_nodes.add(node_id)
+
 
         group_data['valid_nodes'] = valid_nodes
 
@@ -1660,6 +1681,7 @@ def run():
     root_name = cmd_args.root_name
     klen = cmd_args.klen
     rcor_thresh = cmd_args.rcor_thresh
+    max_kmer_count = cmd_args.max_kmer_count
     min_snp_count = cmd_args.min_snp_count
     min_member_count = cmd_args.min_members
     min_perc = cmd_args.min_perc
@@ -1813,7 +1835,8 @@ def run():
 
         leaf_meta = {}
         for sample_id in genotypes:
-            genotype = '.'.join(genotypes[sample_id])
+            #genotype = '.'.join(genotypes[sample_id])
+            genotype = genotypes[sample_id]
             leaf_meta[sample_id] = [genotype]
             for field in metadata[sample_id]:
                 leaf_meta[sample_id].append(metadata[sample_id][field])
