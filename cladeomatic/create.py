@@ -1568,6 +1568,8 @@ def calc_node_associations_groups(metadata, clade_data, group_data):
     samples = set(metadata.keys())
     num_samples = len(samples)
     for clade_id in group_data['membership']:
+        if not clade_id in clade_data:
+            continue
         in_members = group_data['membership'][clade_id]
         features = {}
         genotype_assignments = []
