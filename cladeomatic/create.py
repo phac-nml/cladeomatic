@@ -1091,6 +1091,17 @@ def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states
                 terminal_nodes[node_id] = 0
             terminal_nodes[node_id] += 1
 
+        node_counts = {}
+        for sample_id in genotypes:
+            node_ids = genotypes[sample_id].split(delim)
+            for node_id in node_ids:
+                if not node_id in node_counts:
+                    node_counts[node_id] = 0
+                node_counts[node_id] += 1
+        valid_nodes = set('0') | set(compressed_valid_nodes)
+        for node_id in node_counts:
+            if node_counts[node_id] >= min_member_count:
+                valid_nodes.add(node_id)
        # valid_nodes = set('0') | set(compressed_valid_nodes)
         #for node_id in terminal_nodes:
          #   if terminal_nodes[node_id] >= min_member_count :
