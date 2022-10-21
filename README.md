@@ -82,7 +82,7 @@ Input requirements are:
 
     cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
 
-Option 2 - Predifined groups <br />
+Option 2 - Predefined groups <br />
 This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements. 
 Input requirements are: 
 * TSV formatted group file (sample_id, genotype)
