@@ -8,7 +8,7 @@ Master  |ci-master|
 Dev     |ci-dev|
 ======  ===========
 
-<p align="left"><img src="logo.png" alt="Clade-o-matic" height="150" width="600"></p>
+<p align="left"><img src="logo.png" alt="Clade-o-matic" height="150" width="400"></p>
 
 ## Contents
 
