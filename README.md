@@ -9,39 +9,46 @@ Dev     |ci-dev|
 ======  ===========
 
 .. |logo| image:: logo.png
-    :target: https://github.com/jrober84/cladeomatic
+    :target: https://github.com/phac-nml/cladeomatic
 
+## Contents
 
-Introduction
-============
+- [Introduction](#introduction)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Quick Start](#quick-start)
+- [FAQ](#faq)
+- [Citation](#citation)
+- [Legal](#legal)
+- [Contact](#contact)
+
+## Introduction
+
 **ALPHA version**
 
-Citation
-========
+## Installation
 
-Requirements and Dependencies
-=============================
+Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/cladeomatic/requirements.txt) file, should be automatically installed when using conda or pip)
 
+In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
 
+Install the latest released version from conda:
 
-Installation
-============
+        conda create -c bioconda -c conda-forge -n cladeomatic cladeomatic
 
-With pip_ from Github
----------------------
+Install using pip:
+
+        pip install cladeomatic
 
 Install the latest master branch version directly from Github:
 
-.. code-block::
-bash
-    conda install bio_hansel
-    pip install git+https://github.com/jrober84/cladeomatic.git
+        conda install jellyfish
+        pip install git+https://github.com/phac-nml/cladeomatic.git
 
-Usage
-=====
+
+
+## Usage
 If you run ``cladeomatic``, you should see the following usage statement:
-
-.. code-block::
 
     Usage: cladeomatic <command> [options] <required arguments>
 
@@ -55,13 +62,85 @@ If you run ``cladeomatic``, you should see the following usage statement:
 
     Available commands:
 
-    create  Define lineages and create a kmer scheme [ alpha ]
+    create  Define lineages and create a kmer scheme
     benchmark  Benchmark a kmer scheme
     test     Test parsityper functionality on a small dataset [ not implemented]
     version  Print version and exit
 
-Legal
+Quick start
 =====
+**Create scheme:**
+
+Option 1 - De novo tree-based <br />
+This mode will discover clades and lineages which meet membership size and SNP requirements. 
+Input requirements are: 
+* newick formatted tree
+* VCF
+* Reference sequence (.fasta / .gbk)
+* Name of outgroup sequence
+* Metadata file<br />
+  
+
+    cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+
+Option 2 - Predifined groups <br />
+This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements. 
+Input requirements are: 
+* TSV formatted group file (sample_id, genotype)
+* VCF
+* Reference sequence (.fasta / .gbk)
+* Name of outgroup sequence
+* Metadata file<br />
+  
+
+    cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+  
+
+**Outputs:**
+
+```
+OutputFolderName
+├── {prefix}-clade.snp.histo.html [Tree Mode Only]
+├── {prefix}-clades.info.txt
+├── {prefix}-filt.kmers.txt
+├── {prefix}-genotypes.raw.txt
+├── {prefix}-genotypes.supported.txt
+├── {prefix}-genotypes.selected.txt
+├── {prefix}-genotype.consenus.fasta
+├── {prefix}-jellyfish.counts.txt
+├── {prefix}-scheme.txt
+├── {prefix}-snps.all.txt
+├── pseudo.seqs.fasta
+├── samples.dists.matrix.csv [Tree Mode Only]
+└──
+```
+
+**Benchmark Scheme:**
+Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
+Input requirements are: 
+* VCF
+* Clade-O-Matic Scheme
+* Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
+  
+
+    cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
+
+Evaluate the results for any conflicting genotypes
+
+
+**Outputs:**
+
+```
+OutputFolderName
+├── {prefix}-scheme.scores.txt
+└── {prefix}-scheme.calls.txt
+```
+
+## FAQ
+
+## Citation
+
+## Legal
 
 Copyright Government of Canada 2022
 
@@ -79,7 +158,6 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 
 
-Contact
-=======
+## Contact
 
-**James Robertson**: james.robertson@canada.ca
+**James Robertson**: james.robertson@phac-aspc.gc.ca
