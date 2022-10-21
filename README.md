@@ -9,7 +9,7 @@ Dev     |ci-dev|
 ======  ===========
 
 .. |logo| image:: logo.png
-    :target: https://github.com/phac-nml/cladeomatic/logo.png
+    :target: https://github.com/phac-nml/cladeomatic/blob/main/logo.png
 
 ## Contents
 
