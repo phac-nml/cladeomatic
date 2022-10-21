@@ -162,15 +162,7 @@ def SeqSearchController(seqKmers, fasta_file,out_kmer_file,n_threads=1):
         kseq = seqKmers[idx]
         if idx in revcomp_kmers:
             kseq = revcomp(kseq)
-        if not s in filt:
-            filt[s] = {
-                'aStart':s,
-                'aEnd':e,
-                'num_kmers':0,
-                'kmers':{},
-            }
-        filt[s]['num_kmers']+=1
-        filt[s]['kmers'][id] = kseq
+        filt[id] = kseq
         kmer_presence = []
         for seq_id in kmer_counts:
             if kmer_counts[seq_id][idx] == 1:

@@ -196,6 +196,8 @@ def create_pseudoseqs_from_vcf(ref_seq,vcf_file, outfile):
         id+=1
 
     for sample_id in sample_variants:
+        if len(sample_variants[sample_id]) ==0:
+            sample_variants[sample_id][list(chrom_id_map.keys())[0]] = {}
         for chrom in sample_variants[sample_id]:
             c = chrom
             if chrom not in ref_seq:

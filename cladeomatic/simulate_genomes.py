@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument('--num_generations', type=int, required=False,
                         help='Number of generations to simulate',default=4)
     parser.add_argument('--num_children', type=int, required=False,
-                        help='Number of children per sequence per generation',default=5)
+                        help='Number of children per sequence per generation',default=2)
     parser.add_argument('--min_num_mutations', type=int, required=False,
                         help='Number of mutations per sequence per generation',default=1)
     parser.add_argument('--max_num_mutations', type=int, required=False,

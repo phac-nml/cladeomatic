@@ -1,6 +1,5 @@
 import os
-import sys
-
+import ray
 from cladeomatic.version import __version__
 from cladeomatic.utils.vcfhelper import vcfReader
 from cladeomatic.utils import init_console_logger
@@ -8,6 +7,7 @@ from cladeomatic.utils import parse_metadata
 import pandas as pd
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
 from sklearn.metrics import f1_score
+import time
 
 def parse_args():
     class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
@@ -22,6 +22,7 @@ def parse_args():
                         default=None)
     parser.add_argument('--in_meta', type=str, required=True, help='Tab delimited file of genotype assignments', default=None)
     parser.add_argument('--outdir', type=str, required=True, help='Output Directory to put results')
+    parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('--prefix', type=str, required=False, help='Prefix for output files', default='cladeomatic')
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
@@ -110,7 +111,8 @@ def parse_scheme_genotypes(scheme_file):
                     geno_seqs[genotype][variant_start] = "N"
     return scheme
 
-def call_genotypes(genotype_rules,metadata,variants,max_dist=0,n_threads=1):
+@ray.remote
+def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
     result = {}
     for sample_id in metadata:
         if not 'genotype' in metadata[sample_id]:
@@ -152,7 +154,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0,n_threads=1):
             if total > 0:
                 dists[genotype] = 1 - matches /total
 
-        result[sample_id]['genoytpe_results'] = genoytpe_results
+
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
         pdist = 1
         for genotype in result[sample_id]['genoytpe_dists']:
@@ -173,7 +175,9 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0,n_threads=1):
                 if not is_substring:
                     filt.append(result[sample_id]['predicted_genotype(s)'][i])
             result[sample_id]['predicted_genotype(s)'] = filt
-
+        del result[sample_id]['genoytpe_dists']
+        #del result[sample_id]['genoytpe_results']
+        #print("{}\t{}".format(sample_id,time.time() - stime))
     return result
 
 def run():
@@ -183,6 +187,11 @@ def run():
     metadata_file = cmd_args.in_meta
     prefix = cmd_args.prefix
     outdir = cmd_args.outdir
+    num_threads = cmd_args.num_threads
+
+    if not ray.is_initialized():
+        ray.init(ignore_reinit_error=True, num_cpus=num_threads)
+
 
     logging = init_console_logger(3)
     logging.info("Starting analysis")
@@ -194,8 +203,11 @@ def run():
     logging.info("Reading metadata file {}".format(metadata_file))
     metadata = parse_metadata(metadata_file)
 
+
     logging.info("Reading scheme file {}".format(scheme_file))
     genotype_rules = parse_scheme_genotypes(scheme_file)
+    rule_id = ray.put(genotype_rules)
+    num_genotypes = len(genotype_rules)
 
 
     valid_positions = []
@@ -209,8 +221,32 @@ def run():
     logging.info("Reading snp data from vcf file {}".format(variant_file))
     variants = get_snp_profiles(valid_positions, variant_file)
 
-    logging.info("Calling genotypes for {} samples".format(len(metadata)))
-    genoytpe_results = call_genotypes(genotype_rules, metadata, variants)
+    logging.info("Calling genotypes for {} samples based on {} genotypes".format(len(metadata),num_genotypes))
+    batch_size = int(len(metadata) / num_threads)
+    ray_results = []
+    if batch_size < 1:
+        batch_size = 1
+    sub_metadata = {}
+    sub_variants = {}
+    for sample_id in metadata:
+        sub_metadata[sample_id] = metadata[sample_id]
+        sub_variants[sample_id] = variants[sample_id]
+        if len(sub_metadata) == batch_size:
+            ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
+            sub_metadata = {}
+            sub_variants = {}
+    if len(sub_metadata) > 0:
+        ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
+        sub_metadata = {}
+        sub_variants = {}
+    results = ray.get(ray_results)
+    genoytpe_results = {}
+    for r in results:
+        for sample_id in r:
+            genoytpe_results[sample_id] = r[sample_id]
+    del(results)
+    del(ray_results)
+
 
     fh = open(os.path.join(outdir,"{}-scheme.calls.txt".format(prefix)),'w')
     fh.write("sample_id\tsubmited_genotype\tpredicted_genotype\tis_match\n")
