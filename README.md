@@ -8,8 +8,7 @@ Master  |ci-master|
 Dev     |ci-dev|
 ======  ===========
 
-.. |logo| image:: logo.png
-    :target: https://github.com/phac-nml/cladeomatic/blob/main/
+<p align="center"><img src="logo.png" alt="Clade-o-matic" width="600"></p>
 
 ## Contents
 
