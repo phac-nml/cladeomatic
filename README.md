@@ -27,7 +27,7 @@ Dev     |ci-dev|
 
 ## Installation
 
-Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/cladeomatic/requirements.txt) file, should be automatically installed when using conda or pip)
+Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/requirements.txt) file, should be automatically installed when using conda or pip)
 
 In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
 
