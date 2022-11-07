@@ -1456,26 +1456,26 @@ def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_p
                         base = 'N'
                     genotype_counts[pos][base] += 1
                     global_consensus[pos][base] += 1
-            seq = copy.deepcopy(ref_seq)
-            for pos in genotype_counts:
-                total = genotype_members[genotype]
-                b = max(genotype_counts[pos], key=genotype_counts[pos].get)
-                value = genotype_counts[pos][b]
-                if value / total >= min_perc:
-                    seq[pos - 1] = b
+        seq = copy.deepcopy(ref_seq)
+        for pos in genotype_counts:
+            total = genotype_members[genotype]
+            b = max(genotype_counts[pos], key=genotype_counts[pos].get)
+            value = genotype_counts[pos][b]
+            if value / total >= min_perc:
+                seq[pos - 1] = b
+            else:
+                bases = []
+                for b in genotype_counts[pos]:
+                    value = genotype_counts[pos][b]
+                    if value > 0:
+                        bases.append((b))
+                bases = ''.join(sorted(bases))
+                if bases in IUPAC_LOOK_UP:
+                    b = IUPAC_LOOK_UP[bases]
                 else:
-                    bases = []
-                    for b in genotype_counts[pos]:
-                        value = genotype_counts[pos][b]
-                        if value > 0:
-                            bases.append((b))
-                    bases = ''.join(sorted(bases))
-                    if bases in IUPAC_LOOK_UP:
-                        b = IUPAC_LOOK_UP[bases]
-                    else:
-                        b = 'N'
-                    seq[pos - 1] = b
-            fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
+                    b = 'N'
+                seq[pos - 1] = b
+        fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
     fh.close()
 
     return global_consensus
@@ -2212,8 +2212,6 @@ def run():
 
     logging.info("Constructing kmer rule set")
     kmer_rule_obj = construct_ruleset(selected_kmers, genotype_assignments, outdir, prefix, min_perc)
-
-
 
     logging.info("Creating scheme")
     if len(ref_features) > 0:
