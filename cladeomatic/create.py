@@ -1422,7 +1422,6 @@ def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_p
 
     '''
     variants = get_variants(vcf_file)
-    genotype_counts = {}
     genotype_members = {}
 
     ref_chr = list(ref_seq.keys())[0]
@@ -1431,50 +1430,53 @@ def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_p
     global_consensus = {}
     for i in range(0,ref_len):
         global_consensus[i] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
-    for sample_id in variants:
+
+    genotype_samples = {}
+    for sample_id in genotype_map:
         genotype = genotype_map[sample_id]
-        if not genotype in genotype_counts:
-            genotype_counts[genotype] = {}
-            genotype_members[genotype] = 0
-        genotype_members[genotype] += 1
-        if len(variants[sample_id]) == 0:
-            variants[sample_id][ref_chr] = {}
-        for chrom in variants[sample_id]:
-            for pos,base in enumerate(ref_seq):
-                if not pos in genotype_counts[genotype]:
-                    genotype_counts[genotype][pos] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-':0}
-                if pos in variants[sample_id][chrom]:
-                    base = variants[sample_id][chrom][pos]
-                if not base in genotype_counts[genotype][pos]:
-                    base = 'N'
-                genotype_counts[genotype][pos][base] += 1
-                global_consensus[pos][base]+=1
+        if not genotype in genotype_samples:
+            genotype_samples[genotype] = []
+        genotype_samples[genotype].append(sample_id)
 
 
     fh = open(outfile, 'w')
-
-    for genotype in genotype_counts:
-        seq = copy.deepcopy(ref_seq)
-        for pos in genotype_counts[genotype]:
-            total = genotype_members[genotype]
-            b = max(genotype_counts[genotype][pos], key=genotype_counts[genotype][pos].get)
-            value = genotype_counts[genotype][pos][b]
-            if value / total >= min_perc:
-                seq[pos - 1] = b
-            else:
-                bases = []
-                for b in genotype_counts[genotype][pos]:
-                    value = genotype_counts[genotype][pos][b]
-                    if value > 0:
-                        bases.append((b))
-                bases = ''.join(sorted(bases))
-                if bases in IUPAC_LOOK_UP:
-                    b = IUPAC_LOOK_UP[bases]
+    for genotype in genotype_samples:
+        genotype_members[genotype] = len(genotype_samples[genotype])
+        genotype_counts = {}
+        for sample_id in genotype_samples[genotype]:
+            if len(variants[sample_id]) == 0:
+                variants[sample_id][ref_chr] = {}
+            for chrom in variants[sample_id]:
+                for pos, base in enumerate(ref_seq):
+                    if not pos in genotype_counts:
+                        genotype_counts[pos] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
+                    if pos in variants[sample_id][chrom]:
+                        base = variants[sample_id][chrom][pos]
+                    if not base in genotype_counts[pos]:
+                        base = 'N'
+                    genotype_counts[pos][base] += 1
+                    global_consensus[pos][base] += 1
+            seq = copy.deepcopy(ref_seq)
+            for pos in genotype_counts:
+                total = genotype_members[genotype]
+                b = max(genotype_counts[pos], key=genotype_counts[pos].get)
+                value = genotype_counts[pos][b]
+                if value / total >= min_perc:
+                    seq[pos - 1] = b
                 else:
-                    b = 'N'
-                seq[pos - 1] = b
-
-        fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
+                    bases = []
+                    for b in genotype_counts[pos]:
+                        value = genotype_counts[pos][b]
+                        if value > 0:
+                            bases.append((b))
+                    bases = ''.join(sorted(bases))
+                    if bases in IUPAC_LOOK_UP:
+                        b = IUPAC_LOOK_UP[bases]
+                    else:
+                        b = 'N'
+                    seq[pos - 1] = b
+            fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
+    fh.close()
 
     return global_consensus
 
