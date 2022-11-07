@@ -2108,6 +2108,7 @@ def run():
                                        header=0,dtype = {'sample_id': str,'genotype': str}).astype(str)
     genotype_assignments = dict(zip(genotype_assignments['sample_id'], genotype_assignments['genotype']))
 
+    logging.info("Calculating genotype consensus sequences")
     global_consensus_counts = call_consensus_snp_genotypes(ref_seq, variant_file, genotype_assignments,
                                  os.path.join(outdir, "{}-genotype.consenus.fasta".format(prefix)), min_perc)
     variant_positions = []
@@ -2119,7 +2120,7 @@ def run():
         if count_states > 1:
             variant_positions.append(i)
 
-
+    logging.info("Identifying global optimal kmer positions")
     opt_kmer_positions = get_optimal_kmer_positions(global_consensus_counts, clade_data, klen)
 
     logging.info("Creating pseudo-sequences for kmer selection")
