@@ -1,6 +1,6 @@
 import re
+import os
 from itertools import product
-import tempfile
 import ray
 from Bio import SeqIO
 from ahocorasick import Automaton
@@ -75,7 +75,7 @@ def init_automaton_dict(seqs):
 
 
 @ray.remote
-def processSeq(fasta_file, seqids, num_kmers, klen, aho):
+def processSeqBCK(fasta_file, seqids, num_kmers, klen, aho):
     invalid_kmers = set()
     revcomp_kmers = set()
     kmer_align_start = [-1] * num_kmers
@@ -113,8 +113,7 @@ def processSeq(fasta_file, seqids, num_kmers, klen, aho):
         'seqs_kcounts':seqs_present
     }
 
-
-def SeqSearchController(seqKmers, fasta_file,out_kmer_file,n_threads=1):
+def SeqSearchController_BCK(seqKmers, fasta_file,out_kmer_file,n_threads=1):
     num_kmers = len(seqKmers)
     if num_kmers == 0:
         return {}
@@ -137,6 +136,7 @@ def SeqSearchController(seqKmers, fasta_file,out_kmer_file,n_threads=1):
         result_ids.append(processSeq.remote(fasta_file, batches[i], num_kmers, klen, aho))
 
     results = ray.get(result_ids)
+
     del(aho)
     invalid_kmers = set()
     revcomp_kmers = set()
@@ -176,6 +176,74 @@ def SeqSearchController(seqKmers, fasta_file,out_kmer_file,n_threads=1):
 
 
 
+@ray.remote
+def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
+    invalid_kmers = set()
+    revcomp_kmers = set()
+    kmer_align_start = [-1] * num_kmers
+    kmer_align_end = [-1] * num_kmers
+    seqs_present = {}
+    fh = open(out_file,'w')
+    with open(fasta_file, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            id = str(record.id)
+            if id not in seqids:
+                continue
+            seq = str(record.seq)
+            aln_lookup = create_aln_pos_from_unalign_pos_lookup(seq)
+            seq = seq.replace('-', '')
+            counts = [0] * num_kmers
+            for idx, (kIndex, kmer_seq, is_revcomp) in aho.iter(seq):
+                kIndex = int(kIndex)
+                counts[kIndex] += 1
+                if is_revcomp:
+                    revcomp_kmers.add(kIndex)
+                uStart = idx - klen + 1
+                uEnd = idx
+                if kmer_align_start[kIndex] == -1:
+                    kmer_align_start[kIndex] = aln_lookup[uStart]
+                    kmer_align_end[kIndex] = aln_lookup[uEnd]
+
+            for kIndex, count in enumerate(counts):
+                is_revcomp = kIndex in revcomp_kmers
+                row = [
+                    id, kIndex, count, kmer_align_start[kIndex], kmer_align_end[kIndex],is_revcomp,
+                ]
+                fh.write("{}\n".format("\t".join([str(x) for x in row])))
+            seqs_present[id] = counts
+    fh.close()
+    handle.close()
+
+
+
+
+def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
+    num_kmers = len(seqKmers)
+    if num_kmers == 0:
+        return {}
+    klen = len(seqKmers[0])
+    count_seqs = 0
+    seq_ids = []
+    with open(fasta_file, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            seq_ids.append(str(record.id))
+            count_seqs+=1
+    handle.close()
+    batch_size = int(count_seqs / n_threads)
+    num_workers = n_threads
+    batches = []
+    for i in range(0,num_workers):
+        batches.append(seq_ids[i*batch_size:i*batch_size+batch_size])
+    aho = ray.put(init_automaton_dict(seqKmers))
+    result_ids = []
+    file_paths = []
+    for i in range(0,len(batches)):
+        outfile = os.path.join(out_dir,"{}-kmersearch-{}.txt".format(prefix,i))
+        result_ids.append(processSeq.remote(fasta_file, outfile, batches[i], num_kmers, klen, aho))
+        file_paths.append(outfile)
+
+    ray.get(result_ids)
+    return(file_paths)
 
 
 

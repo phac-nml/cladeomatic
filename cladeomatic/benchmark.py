@@ -206,6 +206,9 @@ def run():
 
     logging.info("Reading scheme file {}".format(scheme_file))
     genotype_rules = parse_scheme_genotypes(scheme_file)
+    for genotype in genotype_rules:
+        if len(genotype_rules[genotype]['positive']) == 0:
+            logging.warn("Genotype {} has no required kmers".format(genotype))
     rule_id = ray.put(genotype_rules)
     num_genotypes = len(genotype_rules)
 

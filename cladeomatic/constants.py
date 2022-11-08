@@ -38,6 +38,20 @@ SCHEME_HEADER = [
     'is_valid'
 ]
 
+CLADE_DEFINING_SNPS_HEADER = [
+    'genotype',
+    'pos',
+    'base',
+    'dna_name',
+    'is_cds',
+    'gene_name',
+    'aa_name'
+    'is_silent',
+]
+
+
+
+
 IUPAC_LOOK_UP = {
         'A': 'A',
         'T': 'T',
