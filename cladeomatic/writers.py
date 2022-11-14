@@ -61,7 +61,7 @@ def write_node_report(clade_data, outfile):
             row = [
                 clade_id,
                 clade_data[clade_id]['chr'][i],
-                clade_data[clade_id]['pos'][i],
+                clade_data[clade_id]['pos'][i]+1,
                 clade_data[clade_id]['bases'][i],
                 clade_data[clade_id]['min_dist'],
                 clade_data[clade_id]['max_dist'],

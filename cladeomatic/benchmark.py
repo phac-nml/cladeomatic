@@ -1,4 +1,6 @@
 import os
+import sys
+
 import ray
 from cladeomatic.version import __version__
 from cladeomatic.utils.vcfhelper import vcfReader
@@ -68,6 +70,7 @@ def parse_scheme_genotypes(scheme_file):
     df = pd.read_csv(scheme_file, sep="\t", header=0, low_memory=False)
     variant_positions = list(df['variant_start'].unique())
     geno_seqs = {}
+    snp_states = {}
     for row in df.itertuples():
         target_variant = row.target_variant
         variant_start = int(row.variant_start)
@@ -76,16 +79,21 @@ def parse_scheme_genotypes(scheme_file):
             positive_genotypes = []
         else:
             positive_genotypes = positive_genotypes.split(',')
-        if len(positive_genotypes) == 0:
-            continue
+
         genotypes = positive_genotypes
         for genotype in positive_genotypes:
 
             if not genotype in scheme:
-                scheme[genotype] = {'positive':{},'partial':{}}
-            scheme[genotype]['positive'][variant_start] = target_variant
+                scheme[genotype] = {'positive':{},'partial':{},'allowed':{}}
+            if not variant_start in scheme[genotype]['positive']:
+                scheme[genotype]['positive'][variant_start] = set()
+            scheme[genotype]['positive'][variant_start].add(target_variant)
 
         partial_genotypes = row.partial_genotypes
+
+        if not variant_start in snp_states:
+            snp_states[variant_start] = set()
+        snp_states[variant_start].add(target_variant)
 
         if isinstance(partial_genotypes,float):
             partial_genotypes = []
@@ -96,19 +104,40 @@ def parse_scheme_genotypes(scheme_file):
             continue
         for genotype in partial_genotypes:
             if not genotype in scheme:
-                scheme[genotype] = {'positive':{},'partial':{}}
-            scheme[genotype]['partial'][variant_start] = target_variant
+                scheme[genotype] = {'positive':{},'partial':{},'allowed':{}}
+            if not variant_start in scheme[genotype]['partial']:
+                scheme[genotype]['partial'][variant_start] = set()
+            scheme[genotype]['partial'][variant_start].add(target_variant)
 
-        for genotype in genotypes:
-            if not genotype in geno_seqs:
-                geno_seqs[genotype] = {}
-                for pos in variant_positions:
-                    geno_seqs[genotype][pos] = 'N'
-            if geno_seqs[genotype][variant_start] == 'N':
-                geno_seqs[genotype][variant_start] = target_variant
-            else:
-                if geno_seqs[genotype][variant_start] != target_variant:
-                    geno_seqs[genotype][variant_start] = "N"
+
+    for genotype in scheme:
+        for pos in snp_states:
+            allowed_bases = set()
+            if pos in scheme[genotype]['partial']:
+                allowed_bases = allowed_bases | set(scheme[genotype]['partial'][pos])
+            if pos in scheme[genotype]['positive']:
+                allowed_bases = allowed_bases | set(scheme[genotype]['positive'][pos])
+            if len(allowed_bases) == 0:
+                allowed_bases = snp_states[pos]
+            scheme[genotype]['allowed'][pos] = allowed_bases
+
+
+    genotypes = list(scheme.keys())
+
+    for i in range(0,len(genotypes)):
+        g1 = genotypes[i]
+        a1 = scheme[g1]['allowed']
+        for k in range(i+1,len(genotypes)):
+            g2 = genotypes[k]
+            dist = 0
+            a2 = scheme[g2]['allowed']
+            for pos in a1:
+                int1 = a1[pos] & a2[pos]
+                if len(int1) == 1:
+                    dist+=1
+            if dist == 0:
+                print("{}\t{}\t{}".format(g1,g2,dist))
+
     return scheme
 
 @ray.remote
@@ -134,18 +163,21 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             dists[genotype] = 1
 
         for pos in variants[sample_id]:
-            found_base = variants[sample_id][pos]
+            found_base = set(variants[sample_id][pos])
+            if '*' in found_base  or '-' in found_base or 'N' in found_base:
+
+                continue
+
             for genotype in genotype_rules:
-                if pos in genotype_rules[genotype]['positive']:
-                    target_base = genotype_rules[genotype]['positive'][pos]
-                    if found_base == target_base:
-                        genoytpe_results[genotype]['match'][pos] = found_base
-                    else:
-                        genoytpe_results[genotype]['mismatch'][pos] = found_base
-                elif pos in genotype_rules[genotype]['partial']:
-                    target_base = genotype_rules[genotype]['partial'][pos]
-                    if found_base == target_base:
-                        genoytpe_results[genotype]['match'][pos] = found_base
+                allowed_bases = genotype_rules[genotype]['allowed'][pos]
+
+                if len(found_base & allowed_bases) == 1:
+                    genoytpe_results[genotype]['match'][pos] = found_base
+
+                else:
+                    genoytpe_results[genotype]['mismatch'][pos] = found_base
+
+
 
         for genotype in genoytpe_results:
             matches = len(genoytpe_results[genotype]['match'])
@@ -159,6 +191,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
         pdist = 1
         for genotype in result[sample_id]['genoytpe_dists']:
             dist =  result[sample_id]['genoytpe_dists'][genotype]
+
             if dist <= pdist and dist <= max_dist:
                 result[sample_id]['predicted_genotype(s)'].append(genotype)
                 result[sample_id]['predicted_genotype_dist'] = dist
@@ -176,6 +209,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
                     filt.append(result[sample_id]['predicted_genotype(s)'][i])
             result[sample_id]['predicted_genotype(s)'] = filt
         del result[sample_id]['genoytpe_dists']
+
         #del result[sample_id]['genoytpe_results']
         #print("{}\t{}".format(sample_id,time.time() - stime))
     return result
@@ -301,7 +335,7 @@ def run():
             if sample_id in group_samples[genotype]['pred']:
                 pred[i] = 1
         geno_f1 = f1_score(truth, pred)
-        fh.write("{}\t{}\t{}\t{}\n".format(genotype,num_true,num_samples,geno_f1))
+        fh.write("{}\t{}\t{}\t{}\n".format(genotype,num_true,sum(pred),geno_f1))
     fh.close()
 
     logging.info("Analysis complete")

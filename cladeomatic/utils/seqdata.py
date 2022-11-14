@@ -1,3 +1,5 @@
+import sys
+
 from Bio import SeqIO, GenBank
 import random, hashlib, copy, re
 from cladeomatic.utils.vcfhelper import vcfReader
@@ -195,6 +197,7 @@ def create_pseudoseqs_from_vcf(ref_seq,vcf_file, outfile):
         chrom_id_map[str(id)] = chrom
         id+=1
 
+
     for sample_id in sample_variants:
         if len(sample_variants[sample_id]) ==0:
             sample_variants[sample_id][list(chrom_id_map.keys())[0]] = {}
@@ -203,7 +206,7 @@ def create_pseudoseqs_from_vcf(ref_seq,vcf_file, outfile):
             if chrom not in ref_seq:
                 if chrom in chrom_id_map:
                     c = chrom_id_map[chrom]
-            seq = list(ref_seq[c])
+            seq = list(copy.deepcopy(ref_seq[c]))
             for pos in sample_variants[sample_id][chrom]:
                 if pos > seqLens[c]:
                     print("Error variant position is outside sequence, check sequence for insertions which are not supported: {} seqlen {} pos".format(seqLens[c],pos))

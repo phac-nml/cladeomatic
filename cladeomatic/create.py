@@ -56,7 +56,7 @@ def parse_args():
                         default=None)
     parser.add_argument('--klen', type=int, required=False, help='kmer length', default=18)
     parser.add_argument('--min_members', type=int, required=False,
-                        help='Minimum number of members for a clade to be valid', default=2)
+                        help='Minimum number of members for a clade to be valid', default=1)
     parser.add_argument('--min_snp_count', type=int, required=False,
                         help='Minimum number of unique snps for a clade to be valid',
                         default=1)
@@ -80,6 +80,7 @@ def parse_args():
     parser.add_argument('--keep_tmp', required=False, help='Keep interim files', action='store_true')
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
     parser.add_argument('--resume', required=False, help='Resume previous analysis', action='store_true')
+    parser.add_argument('--no_compression', required=False, help='Skip compression of tree heirarchy', action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
     return parser.parse_args()
@@ -115,24 +116,6 @@ def create_scheme_obj(header, selected_kmers, seqkmers, kmer_info, sample_genoty
         if not genotype in unique_genotypes:
             unique_genotypes.add(genotype)
 
-    node_members = {}
-    for genotype in unique_genotypes:
-        genotype = genotype.split('.')
-        num_genotypes = len(genotype)
-        for i in range(0, num_genotypes):
-            node_id = genotype[i]
-            if not node_id in node_members:
-                node_members[node_id] = ['.'.join(genotype)]
-            for k in range(i, num_genotypes):
-                g = '.'.join(genotype[0:k + 1])
-                node_members[node_id].append(g)
-    unique_genotypes = set()
-    for node_id in node_members:
-        unique_genotypes = unique_genotypes | set(node_members[node_id])
-
-    for node_id in node_members:
-        node_members[node_id] = sorted(list(set(node_members[node_id])))
-
     num_genotypes = len(unique_genotypes)
     scheme = []
     max_entropy = -1
@@ -142,6 +125,7 @@ def create_scheme_obj(header, selected_kmers, seqkmers, kmer_info, sample_genoty
         ref_base = ref_seq[pos]
         bases = list(selected_kmers[pos].keys())
         alt_bases = []
+
         for b in bases:
             if b == ref_base:
                 continue
@@ -151,7 +135,9 @@ def create_scheme_obj(header, selected_kmers, seqkmers, kmer_info, sample_genoty
             alt_bases = [ref_base]
             # Skip positions where there are multiple kmers to represent a conserved kmer
             if len(selected_kmers[pos][ref_base]) > 1:
+
                 continue
+
         for i in range(0, len(alt_bases)):
             alt_base = alt_bases[i]
             mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
@@ -242,8 +228,8 @@ def create_scheme_obj(header, selected_kmers, seqkmers, kmer_info, sample_genoty
                     if max_entropy < obj['kmer_entropy']:
                         max_entropy = obj['kmer_entropy']
 
-                    obj['positive_genotypes'] = ",".join(kmer_rule_obj[kIndex]['positive_genotypes'])
-                    obj['partial_genotypes'] = ",".join(kmer_rule_obj[kIndex]['partial_genotypes'])
+                    obj['positive_genotypes'] = ",".join(sorted(kmer_rule_obj[kIndex]['positive_genotypes']))
+                    obj['partial_genotypes'] = ",".join(sorted(kmer_rule_obj[kIndex]['partial_genotypes']))
                     obj['gene_name'] = gene_name
                     if not mutation_key in mutation_keys:
                         mutation_keys[mutation_key] = {'alt': [], 'ref': []}
@@ -310,7 +296,7 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
                 return feat
     return None
 
-def construct_ruleset(kmer_info, genotype_map, outdir, prefix, min_perc):
+def construct_ruleset(selected_kmers,kmer_info, genotype_map, outfile, min_perc):
     '''
 
     Parameters
@@ -332,6 +318,7 @@ def construct_ruleset(kmer_info, genotype_map, outdir, prefix, min_perc):
             genotype_counts[genotype] = 0
         genotype_counts[genotype]+=1
 
+
     kmer_rules = {}
     for kIndex in kmer_info:
         kmer_rules[kIndex] = {'positive_genotypes': [], 'partial_genotypes': []}
@@ -342,11 +329,55 @@ def construct_ruleset(kmer_info, genotype_map, outdir, prefix, min_perc):
             total = genotype_counts[genotype]
             g = genotype_data[genotype]
             perc = g / total
-            #print("{}\t{}\t{}\t{}\t{}".format(kIndex,genotype,g,total,perc))
+
             if perc >= min_perc:
                 kmer_rules[kIndex]['positive_genotypes'].append(genotype)
-            else:
+            elif g > 0:
                 kmer_rules[kIndex]['partial_genotypes'].append(genotype)
+
+    bases = ['A','T','C','G']
+    num_bases = len(bases)
+    fh = open(outfile,'w')
+    for pos in selected_kmers:
+        positive_genos = {'A':set(),'T':set(),'C':set(),'G':set()}
+        partial_genos = {'A':set(),'T':set(),'C':set(),'G':set()}
+        for base in selected_kmers[pos]:
+            for kIndex in selected_kmers[pos][base]:
+                row = [
+                    pos,
+                    base,
+                    kIndex,
+                    ",".join([str(x) for x in kmer_rules[kIndex]['positive_genotypes']]),
+                    ",".join([str(x) for x in kmer_rules[kIndex]['partial_genotypes']])
+
+                ]
+                fh.write("{}\n".format("\t".join([str(x) for x in row])))
+                positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
+                partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
+            positive_genos[base] = set(positive_genos[base])
+            positive_genos[base] = set(positive_genos[base])
+
+        for i in range(0,num_bases):
+            b1 = bases[i]
+            int2 = positive_genos[b1] & partial_genos[b1]
+            if len(int2) > 0:
+
+                print("Error genotypes assigned to positive and partial for same position and base {} {} {} {}".format(
+                    pos, b1, b1, int2))
+            for k in range(i+1,num_bases):
+                b2 = bases[k]
+                int1 = positive_genos[b1] & positive_genos[b2]
+                if len(int1) > 0:
+                    print("Error genotypes assigned to multiple positive base states {} {} {} {}".format(pos,b1,b2,int1))
+
+                int3 = positive_genos[b1] & partial_genos[b2]
+                if len(int3) > 0:
+                    print("Error genotypes assigned to positive and partial for same position {} {} {} {}".format(pos,b1,b2,int2))
+
+
+
+
+    fh.close()
 
     return kmer_rules
 
@@ -931,7 +962,7 @@ def generate_genotypes(group_data, delim=None):
 
 
 def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states=6,
-                 min_member_count=1, ete_tree_obj=None, tree_file=None,n_threads=1):
+                 min_member_count=1, ete_tree_obj=None, tree_file=None,n_threads=1,skip_compression=False):
     '''
     Parameters
     ----------
@@ -983,38 +1014,39 @@ def clade_worker(group_data, vcf_file, min_snp_count, outdir, prefix, max_states
              dist_summary['summary']['dist']['75%'] + dist_summary['summary']['dist']['max']),
         ]
 
-        pruned_tree, valid_nodes = prune_tree(ete_tree_obj, list(group_data['valid_nodes']))
-        candidate_nodes = select_nodes(clade_data, nomenclature_dist_ranges)
-        bifurcating_nodes = set(select_bifucating_nodes(pruned_tree, clade_data))
-        compressed_valid_nodes = create_compressed_hierarchy(ete_tree_obj, candidate_nodes)
-        valid_nodes = sorted(list(compressed_valid_nodes | bifurcating_nodes))
-        group_data['valid_nodes'] = set(valid_nodes)
+        if not skip_compression:
+            pruned_tree, valid_nodes = prune_tree(ete_tree_obj, list(group_data['valid_nodes']))
+            candidate_nodes = select_nodes(clade_data, nomenclature_dist_ranges)
+            bifurcating_nodes = set(select_bifucating_nodes(pruned_tree, clade_data))
+            compressed_valid_nodes = create_compressed_hierarchy(ete_tree_obj, candidate_nodes)
+            valid_nodes = sorted(list(compressed_valid_nodes | bifurcating_nodes))
+            group_data['valid_nodes'] = set(valid_nodes)
 
-        genotypes = generate_genotypes(group_data, delim)
-        terminal_nodes = {}
-        for sample_id in genotypes:
-            node_id = genotypes[sample_id].split(delim)[-1]
-            if not node_id in terminal_nodes:
-                terminal_nodes[node_id] = 0
-            terminal_nodes[node_id] += 1
+            genotypes = generate_genotypes(group_data, delim)
+            terminal_nodes = {}
+            for sample_id in genotypes:
+                node_id = genotypes[sample_id].split(delim)[-1]
+                if not node_id in terminal_nodes:
+                    terminal_nodes[node_id] = 0
+                terminal_nodes[node_id] += 1
 
-        node_counts = {}
-        for sample_id in genotypes:
-            node_ids = genotypes[sample_id].split(delim)
-            for node_id in node_ids:
-                if not node_id in node_counts:
-                    node_counts[node_id] = 0
-                node_counts[node_id] += 1
-        valid_nodes = set('0') | set(compressed_valid_nodes)
-        for node_id in node_counts:
-            if node_counts[node_id] >= min_member_count:
-                valid_nodes.add(node_id)
-        # valid_nodes = set('0') | set(compressed_valid_nodes)
-        # for node_id in terminal_nodes:
-        #   if terminal_nodes[node_id] >= min_member_count :
-        #       valid_nodes.add(node_id)
+            node_counts = {}
+            for sample_id in genotypes:
+                node_ids = genotypes[sample_id].split(delim)
+                for node_id in node_ids:
+                    if not node_id in node_counts:
+                        node_counts[node_id] = 0
+                    node_counts[node_id] += 1
+            valid_nodes = set('0') | set(compressed_valid_nodes)
+            for node_id in node_counts:
+                if node_counts[node_id] >= min_member_count:
+                    valid_nodes.add(node_id)
+            # valid_nodes = set('0') | set(compressed_valid_nodes)
+            # for node_id in terminal_nodes:
+            #   if terminal_nodes[node_id] >= min_member_count :
+            #       valid_nodes.add(node_id)
 
-        group_data['valid_nodes'] = valid_nodes
+            group_data['valid_nodes'] = valid_nodes
 
         interval_labels = []
         for i in dist_summary['results']['interval'].tolist():
@@ -1350,7 +1382,7 @@ def kmer_worker(outdir, ref_seq, vcf_file, kLen, min_kmer_count, max_kmer_count,
     return SeqSearchController(seqKmers, pseudo_seq_file, out_kmer_file, n_threads)
 
 
-def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_perc=1):
+def call_consensus_snp_genotypesbck(ref_seq, vcf_file, genotype_map, outfile, min_perc=1):
     '''
 
     Parameters
@@ -1403,8 +1435,11 @@ def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_p
                 variants[sample_id][ref_chr] = {}
             for chrom in variants[sample_id]:
                 for pos in genotype_variants[genotype]:
+                    pos = pos - 1
                     if pos in variants[sample_id][chrom]:
                         base = variants[sample_id][chrom][pos]
+                    else:
+                        continue
                     if not base in genotype_counts[pos]:
                         base = 'N'
                     genotype_counts[pos][base] += 1
@@ -1435,6 +1470,103 @@ def call_consensus_snp_genotypes(ref_seq, vcf_file, genotype_map, outfile, min_p
     for pos,base in enumerate(ref_seq):
         total = sum(global_consensus[pos].values())
         global_consensus[pos][base] += (num_samples - total)
+
+    return global_consensus
+
+
+def call_consensus_snp_genotypes(ref_seq,pseudo_seq_file, genotype_map, outfile, min_perc=1):
+    '''
+
+    Parameters
+    ----------
+    ref_seq
+    vcf_file
+    genotype_map
+    outfile
+    min_perc
+
+    Returns
+    -------
+
+    '''
+    ref_chr = list(ref_seq.keys())[0]
+    ref_len = len(ref_seq[ref_chr])
+    ref_seq = list(ref_seq[ref_chr])
+
+    global_consensus = {}
+    for i in range(0, ref_len):
+        global_consensus[i] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
+
+    with open(pseudo_seq_file, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            seq = str(record.seq).upper()
+            for pos in global_consensus:
+                base = seq[pos]
+                if not base in global_consensus[pos]:
+                    base = 'N'
+                global_consensus[pos][base]+=1
+        handle.close()
+
+    variant_positions = []
+    for pos in global_consensus:
+        count=0
+        for base in global_consensus[pos]:
+            value = global_consensus[pos][base]
+            if value > 0:
+                count+=1
+        if count > 1:
+            variant_positions.append(pos)
+
+    genotype_samples = {}
+    for sample_id in genotype_map:
+        genotype = genotype_map[sample_id]
+        if not genotype in genotype_samples:
+            genotype_samples[genotype] = []
+        genotype_samples[genotype].append(sample_id)
+
+
+
+    out_fh = open(outfile, 'w')
+    for genotype in genotype_samples:
+        genotype_variants = {}
+        for pos in variant_positions:
+            genotype_variants[pos] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
+
+        genotype_members = genotype_samples[genotype]
+        with open(pseudo_seq_file, "r") as handle:
+            for record in SeqIO.parse(handle, "fasta"):
+                id = str(record.id).split("~")[0]
+                if id not in genotype_members:
+                    continue
+                seq = str(record.seq).upper()
+                for pos in genotype_variants:
+                    base = seq[pos]
+                    if not base in genotype_variants[pos]:
+                        base = 'N'
+                    genotype_variants[pos][base] += 1
+            handle.close()
+
+        seq = copy.deepcopy(ref_seq)
+        total = len(genotype_samples[genotype])
+
+        for pos in genotype_variants:
+            b = max(genotype_variants[pos], key=genotype_variants[pos].get)
+            value = genotype_variants[pos][b]
+            if value / total >= min_perc:
+                seq[pos] = b
+            else:
+                bases = []
+                for b in genotype_variants[pos]:
+                    value = genotype_variants[pos][b]
+                    if value > 0:
+                        bases.append((b))
+                bases = ''.join(sorted(bases))
+                if bases in IUPAC_LOOK_UP:
+                    b = IUPAC_LOOK_UP[bases]
+                else:
+                    b = 'N'
+                seq[pos ] = b
+        out_fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
 
     return global_consensus
 
@@ -1729,7 +1861,7 @@ def get_optimal_kmer_positions(global_consensus_counts, clade_data, klen):
             variable_sites = 0
             num_missing = 0
             for k in range(i, i + klen + 1):
-                if k > end:
+                if k >= end:
                     break
                 num_bases = 0
                 if global_consensus_counts[k]['-'] > 0:
@@ -1753,6 +1885,23 @@ def get_optimal_kmer_positions(global_consensus_counts, clade_data, klen):
 
 
 def intelligent_kmer_selection(fasta, opt_kmer_positions, variant_positions, seq_len, ref_seq_id, klen, max_kmers=5,max_ambig=0):
+    '''
+
+    Parameters
+    ----------
+    fasta
+    opt_kmer_positions
+    variant_positions
+    seq_len
+    ref_seq_id
+    klen
+    max_kmers
+    max_ambig
+
+    Returns
+    -------
+
+    '''
     bases = ['A', 'T', 'C', 'G']
     selected_kmers = {}
     with open(fasta, "r") as handle:
@@ -1762,53 +1911,57 @@ def intelligent_kmer_selection(fasta, opt_kmer_positions, variant_positions, seq
             if id == ref_seq_id:
                 ref_seq = seq
 
-            for pos in opt_kmer_positions:
+            for pos in variant_positions:
                 base = seq[pos]
                 if base not in bases:
                     continue
-                start = opt_kmer_positions[pos]['start']
-                end = opt_kmer_positions[pos]['end']
-                kseq = seq[start:end + 1]
-                min_ambig = kseq.count('N')
-                no_gap_len = len(kseq.replace("-", ""))
-                while no_gap_len > klen and end > pos and kseq.count('N') <= min_ambig:
-                    end -= 1
+                start_range = (pos - klen+1,pos)
+                for start in start_range:
+                    if not start in opt_kmer_positions:
+                        continue
+
+                    end = opt_kmer_positions[start]['end']
                     kseq = seq[start:end + 1]
+                    min_ambig = kseq.count('N')
                     no_gap_len = len(kseq.replace("-", ""))
-                    if kseq.count('N') <= min_ambig:
-                        min_ambig = kseq.count('N')
+                    while no_gap_len > klen and end > pos and kseq.count('N') <= min_ambig:
+                        end -= 1
+                        kseq = seq[start:end + 1]
+                        no_gap_len = len(kseq.replace("-", ""))
+                        if kseq.count('N') <= min_ambig:
+                            min_ambig = kseq.count('N')
 
-                while no_gap_len < klen and end < seq_len and kseq.count('N') <= min_ambig:
-                    end += 1
-                    kseq = seq[start:end + 1]
-                    no_gap_len = len(kseq.replace("-", ""))
-                    if kseq.count('N') <= min_ambig:
-                        min_ambig = kseq.count('N')
+                    while no_gap_len < klen and end < seq_len and kseq.count('N') <= min_ambig:
+                        end += 1
+                        kseq = seq[start:end + 1]
+                        no_gap_len = len(kseq.replace("-", ""))
+                        if kseq.count('N') <= min_ambig:
+                            min_ambig = kseq.count('N')
 
-                while no_gap_len < klen and start > 0 and kseq.count('N') <= min_ambig:
-                    start -= 1
-                    kseq = seq[start:end + 1]
-                    no_gap_len = len(kseq.replace("-", ""))
-                    if kseq.count('N') <= min_ambig:
-                        min_ambig = kseq.count('N')
+                    while no_gap_len < klen and start > 0 and kseq.count('N') <= min_ambig:
+                        start -= 1
+                        kseq = seq[start:end + 1]
+                        no_gap_len = len(kseq.replace("-", ""))
+                        if kseq.count('N') <= min_ambig:
+                            min_ambig = kseq.count('N')
 
-                kseq = seq[start:end + 1].replace('-', '')
-                if kseq.count('N') > max_ambig:
-                    continue
+                    kseq = seq[start:end + 1].replace('-', '')
+                    if kseq.count('N') > max_ambig:
+                        continue
 
-                if not pos in selected_kmers:
-                    selected_kmers[pos] = {}
-                    for b in bases:
-                        selected_kmers[pos][b] = {}
+                    if not pos in selected_kmers:
+                        selected_kmers[pos] = {}
+                        for b in bases:
+                            selected_kmers[pos][b] = {}
 
-                if not base in selected_kmers[pos]:
-                    continue
+                    if not base in selected_kmers[pos]:
+                        continue
 
-                if not kseq in selected_kmers[pos][base]:
-                    selected_kmers[pos][base][kseq] = {
-                        'aln_start': start,
-                        'aln_end': end + 1,
-                    }
+                    if not kseq in selected_kmers[pos][base]:
+                        selected_kmers[pos][base][kseq] = {
+                            'aln_start': start,
+                            'aln_end': end ,
+                        }
 
     handle.close()
 
@@ -1889,7 +2042,6 @@ def process_ksearch_results(file_paths,kmer_seqs,genotype_mapping):
             line = line.rstrip().split("\t")
             seq_id = str(line[0]).split("~")[0]
             if not seq_id in genotype_mapping:
-                print("skip {}".format(seq_id))
                 continue
             genoytpe = genotype_mapping[seq_id]
             kIndex = int(line[1])
@@ -1920,20 +2072,18 @@ def process_ksearch_results(file_paths,kmer_seqs,genotype_mapping):
             continue
         if not kmer_info[i]['is_valid']:
             del(kmer_info[i])
-    #for kIndex in kmer_info:
-    #    if '0.2.4.6' in kmer_info[kIndex]['genotype_counts']:
-    #        print("{}\t{}".format(kIndex,kmer_info[kIndex]['genotype_counts']))
 
     return  kmer_info
 
 
-def process_seqkmer(input_file, kmer_info,max_ambig):
+def process_seqkmer(input_file, kmer_info,redundant_kmer_map,max_ambig):
     kmer_data = {}
     fh = open(input_file, 'r')
     next(fh)
     for line in fh:
         row = line.strip().split("\t")
         index = int(row[0])
+        index = redundant_kmer_map[index]
         if not index in kmer_info:
             continue
         kseq = row[1]
@@ -1950,6 +2100,7 @@ def process_seqkmer(input_file, kmer_info,max_ambig):
 
         kmer_data[target_pos][target_base].append(index)
     target_bases = list(kmer_data.keys())
+
     for pos in target_bases :
         for base in ['A', 'T', 'C', 'G']:
             if len(kmer_data[pos][base]) == 0:
@@ -1986,6 +2137,7 @@ def run():
     keep_tmp = cmd_args.keep_tmp
     delim = cmd_args.delim
     max_ambig = cmd_args.max_ambig
+    no_compression = cmd_args.no_compression
 
     logging = init_console_logger(3)
 
@@ -2126,12 +2278,13 @@ def run():
 
     if mode == 'tree':
         group_data = parse_tree_groups(ete_tree_obj)
-        clade_data = clade_worker(group_data, variant_file, min_snp_count, outdir, prefix, max_states=max_states,
-                                  min_member_count=min_member_count, ete_tree_obj=ete_tree_obj, tree_file=tree_file,n_threads=num_threads)
-        valid_nodes = list(clade_data.keys())
-        group_data['valid_nodes'] = set(valid_nodes)
         genotypes = generate_genotypes(group_data)
         write_genotypes(genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)))
+        clade_data = clade_worker(group_data, variant_file, min_snp_count, outdir, prefix, max_states=max_states,
+                                  min_member_count=min_member_count, ete_tree_obj=ete_tree_obj, tree_file=tree_file,n_threads=num_threads,skip_compression=no_compression)
+        valid_nodes = list(clade_data.keys())
+        group_data['valid_nodes'] = set(valid_nodes)
+
 
     else:
         shutil.copyfile(group_file, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)))
@@ -2146,11 +2299,16 @@ def run():
                                        header=0, dtype={'sample_id': str, 'genotype': str}).astype(str)
     genotype_assignments = dict(zip(genotype_assignments['sample_id'], genotype_assignments['genotype']))
 
+
+    logging.info("Creating pseudo-sequences for kmer selection")
+    pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
+    create_pseudoseqs_from_vcf(ref_seq, variant_file, pseudo_seq_file)
+
     logging.info("Calculating genotype consensus sequences")
-    global_consensus_counts = call_consensus_snp_genotypes(ref_seq, variant_file, genotype_assignments,
-                                                           os.path.join(outdir,
+    global_consensus_counts = call_consensus_snp_genotypes(ref_seq, pseudo_seq_file, genotype_assignments, os.path.join(outdir,
                                                                         "{}-genotype.consenus.fasta".format(prefix)),
                                                            min_perc)
+
     variant_positions = []
     for i in range(0, len(global_consensus_counts)):
         count_states = 0
@@ -2163,9 +2321,7 @@ def run():
     logging.info("Identifying global optimal kmer positions")
     opt_kmer_positions = get_optimal_kmer_positions(global_consensus_counts, clade_data, klen)
 
-    logging.info("Creating pseudo-sequences for kmer selection")
-    pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
-    create_pseudoseqs_from_vcf(ref_seq, variant_file, pseudo_seq_file)
+
 
     logging.info("Identifying genotyping kmers")
     kmers = intelligent_kmer_selection(pseudo_seq_file, opt_kmer_positions, variant_positions,
@@ -2182,15 +2338,28 @@ def run():
         row = line.strip().split("\t")
         index = int(row[0])
         kseq = row[1]
-        seqKmers[index] = kseq
+        if not kseq in seqKmers:
+            seqKmers[kseq] = []
 
+        seqKmers[kseq].append(index)
+
+    unique_kmers = {}
+    redundant_kmer_map = {}
+    index = 0
+    for k in seqKmers:
+        unique_kmers[index] = k
+        for uid in seqKmers[k]:
+            redundant_kmer_map[uid] = index
+        index+=1
+    del seqKmers
 
     logging.info("Collecting k-mer position information")
 
-    out_kmer_file = os.path.join(outdir, "{}-seqkmersearch.txt".format(prefix))
-    kmer_result_files = SeqSearchController(seqKmers, pseudo_seq_file, analysis_dir, prefix, num_threads)
-    kmer_info = process_ksearch_results(kmer_result_files, seqKmers, genotype_assignments)
-    grouped_kmer_data = process_seqkmer(kmers_file, kmer_info,max_ambig)
+    kmer_result_files = SeqSearchController(unique_kmers, pseudo_seq_file, analysis_dir, prefix, num_threads)
+    kmer_info = process_ksearch_results(kmer_result_files, unique_kmers, genotype_assignments)
+
+    grouped_kmer_data = process_seqkmer(kmers_file, kmer_info,redundant_kmer_map,max_ambig)
+
 
 
     #Add root node info to the clade data
@@ -2222,13 +2391,13 @@ def run():
 
 
     logging.info("Constructing kmer rule set")
-    kmer_rule_obj = construct_ruleset(kmer_info, genotype_assignments, outdir, prefix, min_perc)
+    kmer_rule_obj = construct_ruleset(selected_kmers,kmer_info, genotype_assignments, os.path.join(outdir,"{}-kmer.rules.txt".format(prefix)), min_perc)
 
     logging.info("Creating scheme")
     if len(ref_features) > 0:
-        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, seqKmers, kmer_info, genotypes, kmer_rule_obj, ref_features, )
+        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, unique_kmers, kmer_info, genotypes, kmer_rule_obj, ref_features )
     else:
-        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, seqKmers, kmer_info,  genotypes, kmer_rule_obj, ref_seq)
+        scheme = create_scheme_obj(SCHEME_HEADER, selected_kmers, unique_kmers, kmer_info,  genotypes, kmer_rule_obj, ref_seq)
 
     fh = open(os.path.join(outdir, "{}-scheme.txt".format(prefix)), 'w')
     fh.write("{}\n".format("\t".join(SCHEME_HEADER)))
