@@ -1474,7 +1474,7 @@ def call_consensus_snp_genotypesbck(ref_seq, vcf_file, genotype_map, outfile, mi
     return global_consensus
 
 
-def call_consensus_snp_genotypes(ref_seq,pseudo_seq_file, genotype_map, outfile, min_perc=1):
+def call_consensus_snp_genotypes_bck(ref_seq,pseudo_seq_file, genotype_map, outfile, min_perc=1):
     '''
 
     Parameters
@@ -1567,6 +1567,41 @@ def call_consensus_snp_genotypes(ref_seq,pseudo_seq_file, genotype_map, outfile,
                     b = 'N'
                 seq[pos ] = b
         out_fh.write(">{}\n{}\n".format(genotype, "".join(seq)))
+
+    return global_consensus
+
+def call_consensus_snp_genotypes(ref_seq,pseudo_seq_file):
+    '''
+
+    Parameters
+    ----------
+    ref_seq
+    vcf_file
+    genotype_map
+    outfile
+    min_perc
+
+    Returns
+    -------
+
+    '''
+    ref_chr = list(ref_seq.keys())[0]
+    ref_len = len(ref_seq[ref_chr])
+    ref_seq = list(ref_seq[ref_chr])
+
+    global_consensus = {}
+    for i in range(0, ref_len):
+        global_consensus[i] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
+
+    with open(pseudo_seq_file, "r") as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            seq = str(record.seq).upper()
+            for pos in global_consensus:
+                base = seq[pos]
+                if not base in global_consensus[pos]:
+                    base = 'N'
+                global_consensus[pos][base]+=1
+        handle.close()
 
     return global_consensus
 
@@ -2305,10 +2340,10 @@ def run():
     create_pseudoseqs_from_vcf(ref_seq, variant_file, pseudo_seq_file)
 
     logging.info("Calculating genotype consensus sequences")
-    global_consensus_counts = call_consensus_snp_genotypes(ref_seq, pseudo_seq_file, genotype_assignments, os.path.join(outdir,
-                                                                        "{}-genotype.consenus.fasta".format(prefix)),
-                                                           min_perc)
-
+    #global_consensus_counts = call_consensus_snp_genotypes(ref_seq, pseudo_seq_file, genotype_assignments, os.path.join(outdir,
+    #                                                                    "{}-genotype.consenus.fasta".format(prefix)),
+    #                                                       min_perc)
+    global_consensus_counts = call_consensus_snp_genotypes(ref_seq, pseudo_seq_file)
     variant_positions = []
     for i in range(0, len(global_consensus_counts)):
         count_states = 0
