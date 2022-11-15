@@ -102,9 +102,6 @@ def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
                     kmer_align_start[kIndex] = aln_lookup[uStart]
                     kmer_align_end[kIndex] = aln_lookup[uEnd]
 
-            if id == 'aroC_609_1~1':
-                print("{}\t{}".format(id,counts[162]))
-
             for kIndex, count in enumerate(counts):
                 is_revcomp = kIndex in revcomp_kmers
                 row = [

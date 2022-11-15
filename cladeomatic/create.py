@@ -364,6 +364,15 @@ def construct_ruleset(selected_kmers,kmer_info, genotype_map, outfile, min_perc)
 
                 print("Error genotypes assigned to positive and partial for same position and base {} {} {} {}".format(
                     pos, b1, b1, int2))
+                for k in selected_kmers[pos][b1]:
+                    a = set(kmer_rules[k]['positive_genotypes'])
+                    if len(int2 & a) > 0:
+                        print("positive {}\t{}".format(k,int2 & a))
+                    a = set(kmer_rules[k]['partial_genotypes'])
+                    if len(int2 & a) > 0:
+                        print("partial {}\t{}".format(k, int2 & a))
+
+                print(selected_kmers[pos][b1])
             for k in range(i+1,num_bases):
                 b2 = bases[k]
                 int1 = positive_genos[b1] & positive_genos[b2]
@@ -2145,7 +2154,106 @@ def process_seqkmer(input_file, kmer_info,redundant_kmer_map,max_ambig):
     return kmer_data
 
 
+def remove_redundant_kmers(selected_kmers,kmer_info, genotype_map, klen,min_perc):
+    variant_postions = sorted(list(selected_kmers.keys()))
+    num_var_pos = len(variant_postions)
+    shared_kmers = set()
+    pot_pos_ovl = {}
+    for i in range(0,len(variant_postions)):
+        var_pos_1 = variant_postions[i]
+        var_kmer_indices_1 = set()
+        for base in selected_kmers[var_pos_1]:
+            var_kmer_indices_1 = var_kmer_indices_1 | set(selected_kmers[var_pos_1][base])
 
+        for k in range(i+1,num_var_pos):
+            var_pos_2 = variant_postions[k]
+            if var_pos_2 - var_pos_1 > klen:
+                break
+            var_kmer_indices_2 = set()
+            for base in selected_kmers[var_pos_2]:
+                var_kmer_indices_2 = var_kmer_indices_2 | set(selected_kmers[var_pos_2][base])
+
+            shared_kmers = shared_kmers | (var_kmer_indices_1 & var_kmer_indices_2)
+            if not var_pos_1 in pot_pos_ovl:
+                pot_pos_ovl[var_pos_1] = []
+            pot_pos_ovl[var_pos_1].append(var_pos_2)
+
+    #get genotype counts
+    genotype_counts = {}
+    for sample_id in genotype_map:
+        genotype = genotype_map[sample_id]
+        if not genotype in genotype_counts:
+            genotype_counts[genotype] = 0
+        genotype_counts[genotype]+=1
+
+
+    kmer_rules = {}
+    for kIndex in kmer_info:
+        kmer_rules[kIndex] = {'positive_genotypes': [], 'partial_genotypes': []}
+        genotype_data = kmer_info[kIndex]['genotype_counts']
+        for genotype in genotype_data:
+            if not genotype in genotype_counts:
+                continue
+            total = genotype_counts[genotype]
+            g = genotype_data[genotype]
+            perc = g / total
+
+            if perc >= min_perc:
+                kmer_rules[kIndex]['positive_genotypes'].append(genotype)
+            elif g > 0:
+                kmer_rules[kIndex]['partial_genotypes'].append(genotype)
+
+    bases = ['A','T','C','G']
+    num_bases = len(bases)
+    for pos in selected_kmers:
+        positive_genos = {'A':set(),'T':set(),'C':set(),'G':set()}
+        partial_genos = {'A':set(),'T':set(),'C':set(),'G':set()}
+        for base in selected_kmers[pos]:
+            for kIndex in selected_kmers[pos][base]:
+                positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
+                partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
+            positive_genos[base] = set(positive_genos[base])
+            positive_genos[base] = set(positive_genos[base])
+
+
+        for i in range(0,num_bases):
+            b1 = bases[i]
+            ovl_geno = positive_genos[b1] & partial_genos[b1]
+            if len(ovl_geno) == 0:
+                continue
+            kpos_geno_counts = {}
+            kpos_inf_scores = {}
+            kpos_kmer_index = {}
+            for k in selected_kmers[pos][b1]:
+                s = kmer_info[k]['aStart']
+                if not s in kpos_geno_counts:
+                    kpos_geno_counts[s] = {}
+                    kpos_inf_scores[s] = 0
+                    kpos_kmer_index[s] = []
+                kpos_kmer_index[s].append(k)
+                if len(kmer_rules[k]['positive_genotypes']) > 0:
+                    kpos_inf_scores[s]+=1
+                counts = kmer_info[k]['genotype_counts']
+                for g in counts:
+                    if not g in kpos_geno_counts[s]:
+                        kpos_geno_counts[s][g] = 0
+                    kpos_geno_counts[s][g] += counts[g]
+            start_positions = sorted(list(kpos_geno_counts.keys()))
+            num_starts = len(start_positions)
+            start_geno_totals = {}
+            for s in start_positions:
+                start_geno_totals[s] = sum(kpos_geno_counts[s].values())
+            num_totals = len(set(start_geno_totals.values()))
+            kpos_inf_scores = {k: v for k, v in sorted(kpos_inf_scores.items(), key=lambda item: item[1],reverse=True)}
+            best_start = list(kpos_inf_scores.keys())[0]
+            del(kpos_kmer_index[best_start])
+            kmers_to_filter = set()
+            for start in kpos_kmer_index:
+                kmers_to_filter = kmers_to_filter | set(kpos_kmer_index[start])
+            selected_kmers[pos][b1] = list(set(selected_kmers[pos][b1]) - kmers_to_filter)
+
+
+    return selected_kmers
 
 
 
@@ -2392,9 +2500,10 @@ def run():
 
     kmer_result_files = SeqSearchController(unique_kmers, pseudo_seq_file, analysis_dir, prefix, num_threads)
     kmer_info = process_ksearch_results(kmer_result_files, unique_kmers, genotype_assignments)
-
     grouped_kmer_data = process_seqkmer(kmers_file, kmer_info,redundant_kmer_map,max_ambig)
 
+    logging.info("Filtering redundant kmers")
+    grouped_kmer_data = remove_redundant_kmers(grouped_kmer_data, kmer_info, genotype_assignments, klen, min_perc)
 
 
     #Add root node info to the clade data
