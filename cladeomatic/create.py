@@ -1,43 +1,25 @@
-import copy
-import statistics
-import time
-import random
-import logging
 import os
-import copy
 import psutil
 import shutil
-import math
 import sys
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
-from statistics import mean
-
-import numpy as np
 import pandas as pd
 import ray
 from Bio import SeqIO
 from Bio.Seq import Seq
-from scipy.signal import find_peaks
-from scipy.stats import spearmanr, pearsonr
-
-from cladeomatic.constants import SCHEME_HEADER, IUPAC_LOOK_UP, CLADE_DEFINING_SNPS_HEADER
-from cladeomatic.utils import init_console_logger, calc_ARI, calc_AMI, calc_shanon_entropy, fisher_exact
+from cladeomatic.constants import SCHEME_HEADER
+from cladeomatic.utils import init_console_logger, calc_shanon_entropy
 from cladeomatic.utils import parse_metadata
-from cladeomatic.utils.jellyfish import run_jellyfish_count, parse_jellyfish_counts
-from cladeomatic.utils.kmerSearch import SeqSearchController, revcomp
-from cladeomatic.utils.phylo_tree import parse_tree, prune_tree, tree_to_distance_matrix, \
-    get_pairwise_distances_from_matrix
-from cladeomatic.utils.seqdata import create_pseudoseqs_from_vcf, parse_reference_gbk, \
-    create_aln_pos_from_unalign_pos_lookup, calc_homopolymers
+from cladeomatic.utils.phylo_tree import parse_tree
+from cladeomatic.utils.seqdata import create_pseudoseqs_from_vcf, parse_reference_gbk, calc_homopolymers
 from cladeomatic.utils.vcfhelper import vcfReader
-from cladeomatic.utils.visualization import plot_bar
-from cladeomatic.utils.seqdata import get_variants
+from cladeomatic.utils.visualization import create_dist_histo
 from cladeomatic.clades import clade_worker
 from cladeomatic.kmers import kmer_worker
 from cladeomatic.utils.snpdists import run_snpdists
-from cladeomatic.writers import write_snp_report, write_kmers, write_genotypes, write_clade_snp_report, write_node_report, print_params
+from cladeomatic.writers import write_snp_report, write_genotypes, write_node_report, print_params, write_scheme
 from cladeomatic.version import __version__
-from cladeomatic.plots import create_dist_histo
+
 
 def parse_args():
     class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
@@ -84,6 +66,8 @@ def parse_args():
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
     parser.add_argument('--resume', required=False, help='Resume previous analysis', action='store_true')
     parser.add_argument('--no_compression', required=False, help='Skip compression of tree heirarchy', action='store_true')
+    parser.add_argument('--force', required=False, help='Force overwite of existing results directory',
+                        action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
     return parser.parse_args()
@@ -453,6 +437,7 @@ def run():
     delim = cmd_args.delim
     max_ambig = cmd_args.max_ambig
     no_compression = cmd_args.no_compression
+    force = cmd_args.force
 
     logging = init_console_logger(3)
 
@@ -469,7 +454,9 @@ def run():
     if not os.path.isdir(outdir):
         logging.info("Creating analysis directory {}".format(outdir))
         os.mkdir(outdir, 0o755)
-
+    elif not force:
+        logging.info("Error directory {} already exists, if you want to overwrite existing results then specify --force".format(outdir))
+        sys.exit()
 
     print_params(cmd_args, os.path.join(outdir,"{}-params.log".format(prefix)))
 
@@ -596,6 +583,9 @@ def run():
     else:
         group_data = parse_group_file(group_file)
 
+    logging.info("Reading metadata file")
+    metadata = parse_metadata(metadata_file)
+
     logging.info("Recreating fasta sequences from vcf")
     pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
     create_pseudoseqs_from_vcf(ref_seq_id,ref_seq[ref_seq_id], variant_file, pseudo_seq_file)
@@ -609,7 +599,7 @@ def run():
     perform_compression = True
     if no_compression:
         perform_compression = False
-    cw = clade_worker(variant_file, distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
+    cw = clade_worker(variant_file, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
                       min_snp_count=min_snp_count, max_states=max_states, min_members=min_member_count,
                  min_inter_clade_dist=1, num_threads=num_threads)
 
@@ -628,7 +618,7 @@ def run():
     target_positions = cw.selected_positions
 
 
-    kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, outdir, prefix, klen, genotype_map, max_ambig=max_ambig, min_perc=min_perc,
+    kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, analysis_dir, prefix, klen, genotype_map, max_ambig=max_ambig, min_perc=min_perc,
                  target_positions=target_positions, num_threads=num_threads)
 
 
@@ -647,12 +637,7 @@ def run():
     else:
         scheme = create_scheme(SCHEME_HEADER, ref_seq, kw, cw.selected_genotypes, trans_table=11)
 
-    fh = open(os.path.join(outdir, "{}-scheme.txt".format(prefix)), 'w')
-    fh.write("{}\n".format("\t".join(SCHEME_HEADER)))
-    for i in range(0, len(scheme)):
-        row = "\t".join([str(x) for x in list(scheme[i].values())])
-        fh.write("{}\n".format(row))
-    fh.close()
+    write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-scheme.txt".format(prefix)))
 
     if not keep_tmp:
         logging.info("Removing temporary analysis folder")

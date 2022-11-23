@@ -1,19 +1,16 @@
-import sys
-import scipy
 import pandas as pd
 import numpy as np
 from cladeomatic.snps import snp_search_controller
-from cladeomatic.create import parse_tree_groups
-from cladeomatic.utils.phylo_tree import parse_tree
+from cladeomatic.utils import calc_ARI, calc_AMI, calc_shanon_entropy, fisher_exact
 from scipy.signal import find_peaks
 from scipy.spatial import distance
 from scipy.cluster import hierarchy
 from collections import OrderedDict
-import logging
-from Bio import SeqIO
+import math
 
 class clade_worker:
     vcf_file = None
+    metadata_dict = {}
     distance_matrix_file = None
     group_data = {}
     delim = '.'
@@ -46,8 +43,9 @@ class clade_worker:
     selected_positions = []
 
 
-    def __init__(self,vcf,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,method='average'):
+    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,method='average'):
         self.vcf_file = vcf
+        self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq
         self.distance_matrix_file = dist_mat_file
         self.group_data = groups
@@ -76,6 +74,7 @@ class clade_worker:
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
+        self.calc_node_associations_groups()
 
 
         if self.perform_compression:
@@ -637,6 +636,92 @@ class clade_worker:
                 self.clade_data[node_id]['is_selected'] = False
         self.set_valid_nodes(self.get_valid_nodes())
         self.selected_genotypes = self.generate_genotypes()
+
+    def calc_node_associations_groups(self):
+        '''
+        :param metadata:
+        :param clade_data:
+        :param ete_tree_obj:
+        :return:
+        '''
+
+        samples = set(self.metadata_dict.keys())
+        num_samples = len(samples)
+        for clade_id in self.group_data['membership']:
+            if not clade_id in self.clade_data:
+                continue
+            in_members = self.group_data['membership'][clade_id]
+            features = {}
+            genotype_assignments = []
+            metadata_labels = {}
+            ftest = {}
+            metadata_counts = {}
+            for sample_id in samples:
+                if sample_id in in_members:
+                    genotype_assignments.append(1)
+                else:
+                    genotype_assignments.append(0)
+                for field_id in self.metadata_dict[sample_id]:
+                    value = self.metadata_dict[sample_id][field_id]
+                    if not field_id in metadata_labels:
+                        metadata_counts[field_id] = {}
+                        metadata_labels[field_id] = []
+                        ftest[field_id] = {}
+                    if not value in ftest[field_id]:
+                        metadata_counts[field_id][value] = 0
+                        ftest[field_id][value] = {
+                            'pos-pos': set(),
+                            'pos-neg': set(),
+                            'neg-pos': set(),
+                            'neg-neg': set()
+                        }
+                    metadata_counts[field_id][value] += 1
+                    if sample_id in in_members:
+                        ftest[field_id][value]['pos-pos'].add(sample_id)
+                    else:
+                        ftest[field_id][value]['neg-pos'].add(sample_id)
+
+                    metadata_labels[field_id].append(value)
+                    if not field_id in features:
+                        features[field_id] = {}
+
+                    if not value in features[field_id]:
+                        features[field_id][value] = 0
+                    if sample_id in in_members:
+                        features[field_id][value] += 1
+
+            for field_id in metadata_labels:
+                category_1 = []
+                category_2 = []
+                for idx, value in enumerate(metadata_labels[field_id]):
+                    if isinstance(value, float):
+                        if math.isnan(value):
+                            continue
+                    value = str(value)
+                    if len(value) == 0 or value == 'nan':
+                        continue
+                    category_1.append(genotype_assignments[idx])
+                    category_2.append(metadata_counts[field_id][value])
+
+                self.clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
+                self.clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
+                self.clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
+                self.clade_data[clade_id]['fisher'][field_id] = {}
+
+                for value in ftest[field_id]:
+                    ftest[field_id][value]['neg-neg'] = (
+                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
+                    ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
+                    table = [
+                        [len(ftest[field_id][value]['pos-pos']),
+                         len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
+                        [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
+                         len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
+                    ]
+                    oddsr, p = fisher_exact(table, alternative='greater')
+                    self.clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
+
+
 
 
 

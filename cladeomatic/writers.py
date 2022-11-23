@@ -133,3 +133,10 @@ def write_genotypes(genotypes, outfile):
     fh.close()
     return
 
+def write_scheme(header,scheme,outfile):
+    fh = open(outfile, 'w')
+    fh.write("{}\n".format("\t".join(header)))
+    for i in range(0, len(scheme)):
+        row = "\t".join([str(x) for x in list(scheme[i].values())])
+        fh.write("{}\n".format(row))
+    fh.close()
