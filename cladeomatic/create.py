@@ -430,10 +430,6 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
         filt.append(scheme[i])
     return scheme
 
-
-
-
-
 def run():
     cmd_args = parse_args()
     tree_file = cmd_args.in_nwk
@@ -663,5 +659,3 @@ def run():
         shutil.rmtree(analysis_dir)
 
     logging.info("Analysis complete")
-
-run()
