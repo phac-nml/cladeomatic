@@ -184,36 +184,25 @@ def get_variants(vcf_file):
 
 
 
-def create_pseudoseqs_from_vcf(ref_seq,vcf_file, outfile):
+def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
     sample_variants = get_variants(vcf_file)
     fh = open(outfile,'w')
-    for chr in ref_seq:
-        fh.write(">{}~{}\n{}\n".format(chr, chr, ''.join(ref_seq[chr])))
-    seqLens = {}
-    chrom_id_map = {}
-    id = 1
-    for chrom in ref_seq:
-        seqLens[chrom] = len(ref_seq[chrom])
-        chrom_id_map[str(id)] = chrom
-        id+=1
-
-
+    fh.write(">{}\n{}\n".format(ref_id, ref_seq))
+    ref_len = len(ref_seq)
     for sample_id in sample_variants:
+        if sample_id == ref_id:
+            continue
         if len(sample_variants[sample_id]) ==0:
-            sample_variants[sample_id][list(chrom_id_map.keys())[0]] = {}
+            sample_variants[sample_id] = {}
+        seq = list(copy.deepcopy(ref_seq))
         for chrom in sample_variants[sample_id]:
-            c = chrom
-            if chrom not in ref_seq:
-                if chrom in chrom_id_map:
-                    c = chrom_id_map[chrom]
-            seq = list(copy.deepcopy(ref_seq[c]))
             for pos in sample_variants[sample_id][chrom]:
-                if pos > seqLens[c]:
-                    print("Error variant position is outside sequence, check sequence for insertions which are not supported: {} seqlen {} pos".format(seqLens[c],pos))
+                if pos >= ref_len:
+                    print("Error variant position is outside sequence, check sequence for insertions which are not supported: {} seqlen {} pos".format(ref_len,pos))
                 base = sample_variants[sample_id][chrom][pos]
                 seq[pos-1] = base
             seq = ''.join(seq)
-            fh.write(">{}~{}\n{}\n".format(sample_id, chrom, seq))
+            fh.write(">{}\n{}\n".format(sample_id,seq))
 
     fh.close()
 

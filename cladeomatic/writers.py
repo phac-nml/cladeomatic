@@ -50,9 +50,9 @@ def write_node_report(clade_data, outfile):
     :return:
     '''
     fh = open(outfile, 'w')
-    write_header = True
-    header = ['clade_id', 'chr', 'pos', 'base', 'min_dist', 'max_dist', 'ave_dist', "is_selected", 'field_name',
-              'entropy', 'ari', 'ami']
+
+    header = ['clade_id', 'pos', 'base', 'ave_dist', 'is_valid','is_selected', 'closest_clade_id', 'closest_sample_id',
+              'closest_sample_dist', 'field_name', 'entropy', 'ari', 'ami']
     fh.write("{}\n".format("\t".join([str(x) for x in header])))
 
     for clade_id in clade_data:
@@ -60,13 +60,15 @@ def write_node_report(clade_data, outfile):
         for i in range(0, num_bases):
             row = [
                 clade_id,
-                clade_data[clade_id]['chr'][i],
+                clade_data[clade_id]['num_members'],
                 clade_data[clade_id]['pos'][i]+1,
                 clade_data[clade_id]['bases'][i],
-                clade_data[clade_id]['min_dist'],
-                clade_data[clade_id]['max_dist'],
-                clade_data[clade_id]['ave_dist'],
+                clade_data[clade_id]['ave_within_clade_dist'],
+                clade_data[clade_id]['is_valid'],
                 clade_data[clade_id]['is_selected'],
+                clade_data[clade_id]['closest_clade_id'],
+                clade_data[clade_id]['closest_sample_id'],
+                clade_data[clade_id]['closest_sample_dist'],
                 '',
                 '',
                 '',
@@ -79,10 +81,10 @@ def write_node_report(clade_data, outfile):
                     entropy = clade_data[clade_id]['entropies'][field_name]
                     ari = clade_data[clade_id]['ari'][field_name]
                     ami = clade_data[clade_id]['ami'][field_name]
-                    row[8] = field_name
-                    row[9] = entropy
-                    row[10] = ari
-                    row[11] = ami
+                    row[10] = field_name
+                    row[11] = entropy
+                    row[12] = ari
+                    row[13] = ami
                     fh.write("{}\n".format("\t".join([str(x) for x in row])))
 
     fh.close()
@@ -131,11 +133,3 @@ def write_genotypes(genotypes, outfile):
     fh.close()
     return
 
-def write_filtered_kmers(kmer_info,outfile):
-    fh = open(outfile, 'w')
-    fh.write("sample_id\tgenotype\n")
-    for sample_id in genotypes:
-        genotype = genotypes[sample_id]
-        fh.write("{}\t{}\n".format(sample_id, genotype))
-    fh.close()
-    return
