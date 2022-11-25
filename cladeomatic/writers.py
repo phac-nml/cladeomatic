@@ -52,7 +52,7 @@ def write_node_report(clade_data, outfile):
     fh = open(outfile, 'w')
 
     header = ['clade_id', 'pos', 'base', 'ave_dist', 'is_valid','is_selected', 'closest_clade_id', 'closest_sample_id',
-              'closest_sample_dist', 'field_name', 'entropy', 'ari', 'ami']
+              'closest_sample_dist', 'field_name', 'fisher_oddsr', 'fisher_p']
     fh.write("{}\n".format("\t".join([str(x) for x in header])))
 
     for clade_id in clade_data:
@@ -72,19 +72,14 @@ def write_node_report(clade_data, outfile):
                 '',
                 '',
                 '',
-                '',
             ]
-            if len(clade_data[clade_id]['entropies']) == 0:
+            if len(clade_data[clade_id]['fisher']) == 0:
                 fh.write("{}\n".format("\t".join([str(x) for x in row])))
             else:
-                for field_name in clade_data[clade_id]['entropies']:
-                    entropy = clade_data[clade_id]['entropies'][field_name]
-                    ari = clade_data[clade_id]['ari'][field_name]
-                    ami = clade_data[clade_id]['ami'][field_name]
+                for field_name in clade_data[clade_id]['fisher']:
                     row[10] = field_name
-                    row[11] = entropy
-                    row[12] = ari
-                    row[13] = ami
+                    row[11] = clade_data[clade_id]['fisher'][field_name]['oddsr']
+                    row[12] = clade_data[clade_id]['fisher'][field_name]['p']
                     fh.write("{}\n".format("\t".join([str(x) for x in row])))
 
     fh.close()

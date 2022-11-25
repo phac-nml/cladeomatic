@@ -1,12 +1,15 @@
+import sys
+
 import pandas as pd
 import numpy as np
 from cladeomatic.snps import snp_search_controller
-from cladeomatic.utils import calc_ARI, calc_AMI, calc_shanon_entropy, fisher_exact
+from cladeomatic.utils import fisher_exact
 from scipy.signal import find_peaks
 from scipy.spatial import distance
 from scipy.cluster import hierarchy
+from scipy.stats import spearmanr, pearsonr
 from collections import OrderedDict
-import math
+import random
 
 class clade_worker:
     vcf_file = None
@@ -22,9 +25,14 @@ class clade_worker:
     min_inter_clade_dist = 1
     ref_seq = ''
     method = ''
+    rcor_thresh = 0
+    max_snp_count = 1
 
     #Derived
     snp_data = {}
+    num_positions = 0
+    num_valid_positions = 0
+    num_canonical_positions = 0
     clade_data = {}
     raw_genotypes = {}
     supported_genotypes = {}
@@ -43,7 +51,7 @@ class clade_worker:
     selected_positions = []
 
 
-    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,method='average'):
+    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,method='average',rcor_thresh=0.4):
         self.vcf_file = vcf
         self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq
@@ -57,12 +65,15 @@ class clade_worker:
         self.min_inter_clade_dist = min_inter_clade_dist
         self.perform_compression = perform_compression
         self.method = method
+        self.rcor_thresh = rcor_thresh
+        self.max_snp_count = max_snps
         self.workflow()
         return
 
     def workflow(self):
         self.raw_genotypes = self.generate_genotypes()
         self.snp_data = snp_search_controller(self.group_data, self.vcf_file, self.num_threads)
+        self.summarize_snps()
         self.variant_positions = self.get_variant_positions()
         self.snp_based_filter()
         self.get_all_nodes()
@@ -89,10 +100,36 @@ class clade_worker:
             self.fix_root()
             valid_nodes = self.get_valid_nodes()
             self.set_valid_nodes(valid_nodes)
-            self.dist_based_nomenclature()
 
+        self.dist_based_nomenclature()
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
+        self.temporal_signal()
+
+
+    def summarize_snps(self):
+        num_canonical = 0
+        num_valid = 0
+        variant_pos = []
+        for chrom in self.snp_data:
+            num_positions = len(self.snp_data[chrom])
+            for pos in self.snp_data[chrom]:
+                variant_pos.append(pos)
+                pos_is_valid = False
+                pos_is_canonical = False
+                for base in self.snp_data[chrom][pos]:
+                    if self.snp_data[chrom][pos][base]['is_valid']:
+                        pos_is_valid = True
+                    if self.snp_data[chrom][pos][base]['is_canonical']:
+                        pos_is_canonical = True
+                if pos_is_valid:
+                    num_valid+=1
+                if pos_is_canonical:
+                    num_canonical+=1
+        self.num_positions = num_positions
+        self.num_valid_positions = num_valid
+        self.num_canonical_positions = num_canonical
+        self.variant_positions = variant_pos
 
 
     def get_selected_positions(self):
@@ -152,10 +189,7 @@ class clade_worker:
                 'min_dist': 0,
                 'max_dist': 0,
                 'ave_dist': 0,
-                'entropies': {},
                 'fisher': {},
-                'ari': {},
-                'ami': {},
                 'num_members':self.node_counts[node_id],
                 'is_valid':True,
                 'is_selected':True,
@@ -166,7 +200,12 @@ class clade_worker:
                 'closest_clade_dist':0,
                 'closest_sample_id': None,
                 'closest_sample_dist': 0,
-                'clade_sample_id':None
+                'clade_sample_id':None,
+                'spearmanr':0,
+                'spearmanr_pvalue':1,
+                'pearsonr':0,
+                'pearsonr_pvalue':1,
+                'is_temporal_signal_present':False
             }
 
     def populate_clade_data(self):
@@ -216,27 +255,14 @@ class clade_worker:
         return genotypes
 
     def snp_based_filter(self):
-        '''
-        Accepts a snp_data dict and filters the dictionary to return only those snps which are present in >=min_count samples
-        and have no more than max_state bases at a given position
-        :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
-        :param min_count: int
-        :param max_states: int
-        :return: dict
-        '''
-        filtered = {}
         for chrom in self.snp_data:
-            filtered[chrom] = {}
             for pos in self.snp_data[chrom]:
+                if len(self.snp_data[chrom][pos]) > self.max_states:
+                    self.snp_data[chrom][pos][base]['is_valid'] = False
                 for base in self.snp_data[chrom][pos]:
                     if self.snp_data[chrom][pos][base]['is_canonical']:
-                        if self.snp_data[chrom][pos][base]['num_members'] >= self.min_member_count:
-                            if not pos in filtered[chrom]:
-                                filtered[chrom][pos] = {}
-                            filtered[chrom][pos][base] = self.snp_data[chrom][pos][base]
-                if pos in filtered[chrom] and len(filtered[chrom][pos]) > self.max_states:
-                    del (filtered[chrom][pos])
-        self.snp_data = filtered
+                        if self.snp_data[chrom][pos][base]['num_members'] < self.min_member_count:
+                            self.snp_data[chrom][pos][base]['is_valid'] = False
 
     def get_bifurcating_nodes(self):
         nodes = {}
@@ -403,6 +429,7 @@ class clade_worker:
         node_bins = self.node_bins
         genotypes = self.generate_genotypes()
         invalid_nodes = set()
+
         for sample_id in genotypes:
             genotype = genotypes[sample_id].split(self.delim)
             num_nodes = len(genotype)
@@ -417,9 +444,18 @@ class clade_worker:
                     if n1 in node_bins[bin_id] and n2 in node_bins[bin_id]:
                         invalid_nodes.add(n2)
                         break
-
         self.set_invalid_nodes(invalid_nodes)
         self.set_valid_nodes(self.get_valid_nodes() - invalid_nodes)
+        terminal_nodes = set()
+        genotypes = self.generate_genotypes()
+        for sample_id in genotypes:
+            genotype = genotypes[sample_id].split(self.delim)
+            node_id = genotype[-1]
+            if node_id in self.clade_data:
+                terminal_nodes.add(node_id)
+        invalid_nodes = invalid_nodes | (self.get_valid_nodes() - terminal_nodes)
+        self.set_invalid_nodes(invalid_nodes)
+        self.set_valid_nodes(terminal_nodes - invalid_nodes)
 
     def get_variant_positions(self):
         variant_positions = []
@@ -637,6 +673,20 @@ class clade_worker:
         self.set_valid_nodes(self.get_valid_nodes())
         self.selected_genotypes = self.generate_genotypes()
 
+    def calc_metadata_counts(self,sample_set):
+        metadata_counts = {}
+        for sample_id in self.metadata_dict:
+            if sample_id not in sample_set:
+                continue
+            for field_id in self.metadata_dict[sample_id]:
+                value = self.metadata_dict[sample_id][field_id]
+                if not field_id in metadata_counts:
+                    metadata_counts[field_id] = {}
+                if not value in metadata_counts[field_id]:
+                    metadata_counts[field_id][value] = 0
+                metadata_counts[field_id][value] +=1
+        return metadata_counts
+
     def calc_node_associations_groups(self):
         '''
         :param metadata:
@@ -644,82 +694,189 @@ class clade_worker:
         :param ete_tree_obj:
         :return:
         '''
-
         samples = set(self.metadata_dict.keys())
         num_samples = len(samples)
-        for clade_id in self.group_data['membership']:
-            if not clade_id in self.clade_data:
-                continue
-            in_members = self.group_data['membership'][clade_id]
-            features = {}
-            genotype_assignments = []
-            metadata_labels = {}
-            ftest = {}
-            metadata_counts = {}
-            for sample_id in samples:
-                if sample_id in in_members:
-                    genotype_assignments.append(1)
-                else:
-                    genotype_assignments.append(0)
-                for field_id in self.metadata_dict[sample_id]:
-                    value = self.metadata_dict[sample_id][field_id]
-                    if not field_id in metadata_labels:
-                        metadata_counts[field_id] = {}
-                        metadata_labels[field_id] = []
-                        ftest[field_id] = {}
-                    if not value in ftest[field_id]:
-                        metadata_counts[field_id][value] = 0
-                        ftest[field_id][value] = {
-                            'pos-pos': set(),
-                            'pos-neg': set(),
-                            'neg-pos': set(),
-                            'neg-neg': set()
-                        }
-                    metadata_counts[field_id][value] += 1
-                    if sample_id in in_members:
-                        ftest[field_id][value]['pos-pos'].add(sample_id)
-                    else:
-                        ftest[field_id][value]['neg-pos'].add(sample_id)
+        metadata_counts = self.calc_metadata_counts(samples)
+        for clade_id in self.clade_data:
+            for col in metadata_counts:
+                if col == 'year':
+                    continue
+                for field_name in metadata_counts[col]:
+                    self.clade_data[clade_id]['fisher'][field_name] = {'oddsr': 'nan', 'p': 1}
 
-                    metadata_labels[field_id].append(value)
-                    if not field_id in features:
-                        features[field_id] = {}
 
-                    if not value in features[field_id]:
-                        features[field_id][value] = 0
-                    if sample_id in in_members:
-                        features[field_id][value] += 1
-
-            for field_id in metadata_labels:
-                category_1 = []
-                category_2 = []
-                for idx, value in enumerate(metadata_labels[field_id]):
-                    if isinstance(value, float):
-                        if math.isnan(value):
-                            continue
-                    value = str(value)
-                    if len(value) == 0 or value == 'nan':
-                        continue
-                    category_1.append(genotype_assignments[idx])
-                    category_2.append(metadata_counts[field_id][value])
-
-                self.clade_data[clade_id]['ari'][field_id] = calc_ARI(category_1, category_2)
-                self.clade_data[clade_id]['ami'][field_id] = calc_AMI(category_1, category_2)
-                self.clade_data[clade_id]['entropies'][field_id] = calc_shanon_entropy(category_2)
-                self.clade_data[clade_id]['fisher'][field_id] = {}
-
-                for value in ftest[field_id]:
-                    ftest[field_id][value]['neg-neg'] = (
-                            ftest[field_id][value]['pos-pos'] | ftest[field_id][value]['neg-pos'])
-                    ftest[field_id][value]['pos-neg'] = in_members - ftest[field_id][value]['neg-neg']
-                    table = [
-                        [len(ftest[field_id][value]['pos-pos']),
-                         len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['pos-neg'])],
-                        [len(ftest[field_id][value]['neg-pos'] | ftest[field_id][value]['pos-pos']),
-                         len(ftest[field_id][value]['neg-neg'] | ftest[field_id][value]['neg-pos'])]
+        for genotype in self.group_data['membership']:
+            clade_id = genotype.split(self.delim)[-1]
+            in_members_indexes = self.group_data['membership'][genotype]
+            in_members = set()
+            for id in in_members_indexes:
+                in_members.add(self.group_data['sample_map'][id]['sample_id'])
+            num_members = len(in_members)
+            in_counts = self.calc_metadata_counts(in_members)
+            for col in in_counts:
+                if col == 'year':
+                    continue
+                for field_name in in_counts[col]:
+                    table  = [
+                        [ 0, 0 ],
+                        [ 0, 0 ],
                     ]
+                    pp = in_counts[col][field_name]
+                    pn = num_members - pp
+                    np = metadata_counts[col][field_name] - pp
+                    nn = num_samples - metadata_counts[col][field_name]  - pn
+                    #heuristic to skip results with low likelihood of success
+                    if pn / num_members > 0.2:
+                        continue
+                    table[0][0] = pp
+                    table[0][1] = pn
+                    table[1][0] = np
+                    table[1][1] = nn
                     oddsr, p = fisher_exact(table, alternative='greater')
-                    self.clade_data[clade_id]['fisher'][field_id][value] = {'oddsr': oddsr, 'p': p}
+                    self.clade_data[clade_id]['fisher'][field_name] = {'oddsr': oddsr, 'p': p}
+
+    def temporal_signal(self):
+        '''
+        Parameters
+        ----------
+        metadata
+        clade_data
+        ete_tree_obj
+        rcor_thresh
+        Returns
+        -------
+        '''
+
+        sample_id = list(self.metadata_dict.keys())[0]
+        if 'year' not in self.metadata_dict[sample_id]:
+            return
+
+        temporal_data = {}
+        for node_id in self.clade_data:
+            temporal_data[node_id] = {
+                'dist':[],
+                'year':[]
+            }
+
+        fh = open(self.distance_matrix_file, 'r')
+        header = next(fh).rstrip().split("\t")
+        num_columns = len(header)
+        sample_list = header[1:]
+        sample_lookup = self.genotype_lookup(sample_list)
+        index = 1
+        for line in fh:
+            line = line.rstrip().split("\t")
+            sample_id_1 = line[0]
+            nodes_1 = set(sample_lookup[sample_id_1])
+            y1 = self.metadata_dict[sample_id_1]['year']
+            if y1 == 'nan' or len(y1) == 0 or y1 is None:
+                continue
+            for i in range(index, num_columns):
+                sample_id_2 = header[i]
+                if sample_id_1 == sample_id_2:
+                    continue
+                y2 = self.metadata_dict[sample_id_2]['year']
+                if y2 == 'nan' or len(y2) == 0 or y2 is None:
+                    continue
+                nodes_2 = set(sample_lookup[sample_id_2])
+                value = int(line[i])
+                ovl = nodes_1 & nodes_2
+                for node_id in ovl:
+                    temporal_data[node_id]['dist'].append(value)
+                    temporal_data[node_id]['year'].append(y2)
+            for node_id in ovl:
+                temporal_data[node_id]['dist'].append(value)
+                temporal_data[node_id]['year'].append(y1)
+        fh.close()
+
+        for node_id in temporal_data:
+            R = 0
+            P = 1
+            Rpear = 0
+            Ppear = 1
+            if len(temporal_data[node_id]) >= 3:
+                R, P = spearmanr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
+                Rpear, Ppear = pearsonr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
+
+            self.clade_data[node_id]['spearmanr'] = R
+            self.clade_data[node_id]['spearmanr_pvalue'] = P
+            self.clade_data[node_id]['pearsonr'] = Rpear
+            self.clade_data[node_id]['pearsonr_pvalue'] = Ppear
+            is_present = False
+            if R > self.rcor_thresh or Rpear > self.rcor_thresh:
+                is_present = True
+            self.clade_data[node_id]['is_temporal_signal_present'] = is_present
+
+    def clade_snp_count(self):
+        counts = {}
+        for node_id in self.clade_data:
+            counts[node_id] = len(self.clade_data[node_id]['pos'])
+        return counts
+
+    def clade_snp_association(self):
+        snps = {}
+        for node_id in self.clade_data:
+            for idx,pos in enumerate(self.clade_data[node_id]['pos']):
+                base = self.clade_data[node_id]['bases'][idx]
+                name = "{}-{}".format(pos,base)
+                if not name in snps:
+                    snps[name] = set()
+                snps[name].add(node_id)
+        return snps
+
+    def prune_snps(self):
+        max_snps = self.max_snp_count
+        node_counts = self.clade_snp_count()
+        nodes_to_prune = []
+
+        for node_id in node_counts:
+            count = node_counts[node_id]
+            if count > max_snps:
+                nodes_to_prune.append(node_id)
+
+        snp_assoc = self.clade_snp_association()
+        selected_snps = set()
+        for name in snp_assoc:
+            (pos,base) = name.split('-')
+            pos = int(pos)
+            if len(snp_assoc[name]) == 1:
+                selected_snps.add(pos)
+
+        for node_id in self.clade_data:
+            if node_counts[node_id] < max_snps:
+                continue
+            no_ovl = set(self.clade_data[node_id]['pos']) - selected_snps
+            if len(no_ovl) == 0:
+                continue
+            ovl = set(self.clade_data[node_id]['pos'])  - no_ovl
+            pos = []
+            bases = []
+            if len(ovl) < max_snps:
+                c = list(no_ovl)
+                random.shuffle(c)
+                ovl = ovl |set(c[0:max_snps-len(ovl)])
+            for idx, p in self.clade_data[node_id]['pos']:
+                if p in ovl:
+                    pos.append(p)
+                    bases.append(self.clade_data[node_id]['bases'][p])
+
+            self.clade_data[node_id]['pos'] = pos
+            self.clade_data[node_id]['bases'] = bases
+
+        self.selected_positions = self.get_selected_positions()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

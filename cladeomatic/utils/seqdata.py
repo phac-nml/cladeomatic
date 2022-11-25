@@ -162,7 +162,7 @@ def get_variants(vcf_file):
 
     while data is not None:
         chrom = data['#CHROM']
-        pos = int(data['POS'])
+        pos = int(data['POS']) -1
         ref = data['REF']
 
         for sample_id in samples:
@@ -200,7 +200,7 @@ def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
                 if pos >= ref_len:
                     print("Error variant position is outside sequence, check sequence for insertions which are not supported: {} seqlen {} pos".format(ref_len,pos))
                 base = sample_variants[sample_id][chrom][pos]
-                seq[pos-1] = base
+                seq[pos] = base
             seq = ''.join(seq)
             fh.write(">{}\n{}\n".format(sample_id,seq))
 

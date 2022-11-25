@@ -49,6 +49,7 @@ class kmer_worker:
         return
 
     def workflow(self):
+        print(self.target_positions)
         self.init_msa_base_counts()
         self.pop_msa_base_counts()
         self.find_variant_positions()
@@ -69,7 +70,7 @@ class kmer_worker:
         self.init_kmer_scheme_data()
         self.populate_kmer_scheme_data()
         self.remove_empty_base_states()
-
+        print(self.kmer_scheme_data.keys())
         self.construct_ruleset()
 
         self.remove_redundant_kmers()
@@ -402,16 +403,17 @@ class kmer_worker:
                     del (self.kmer_scheme_data[index][base])
 
     def remove_redundant_kmers(self):
-        selected_kmers = self.kmer_scheme_data
         kmer_info = self.int_base_kmer_lookup
         kmer_rules = self.rule_set
         bases = self.valid_bases
         num_bases = len(bases)
-        for pos in selected_kmers:
+        for pos in self.kmer_scheme_data:
+            if pos == 0:
+                continue
             positive_genos = {'A': set(), 'T': set(), 'C': set(), 'G': set()}
             partial_genos = {'A': set(), 'T': set(), 'C': set(), 'G': set()}
-            for base in selected_kmers[pos]:
-                for kIndex in selected_kmers[pos][base]:
+            for base in self.kmer_scheme_data[pos]:
+                for kIndex in self.kmer_scheme_data[pos][base]:
                     positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
                     partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
                 positive_genos[base] = set(positive_genos[base])
@@ -419,13 +421,14 @@ class kmer_worker:
 
             for i in range(0, num_bases):
                 b1 = bases[i]
-                ovl_geno = positive_genos[b1] & partial_genos[b1]
-                if len(ovl_geno) == 0:
+                if b1 not in self.kmer_scheme_data[pos]:
                     continue
+
                 kpos_geno_counts = {}
                 kpos_inf_scores = {}
                 kpos_kmer_index = {}
-                for k in selected_kmers[pos][b1]:
+
+                for k in self.kmer_scheme_data[pos][b1]:
                     s = kmer_info[k]['aln_start']
                     if not s in kpos_geno_counts:
                         kpos_geno_counts[s] = {}
@@ -442,7 +445,7 @@ class kmer_worker:
                 kpos_inf_scores = {k: v for k, v in
                                    sorted(kpos_inf_scores.items(), key=lambda item: item[1], reverse=True)}
                 best_start = list(kpos_inf_scores.keys())[0]
-                selected_kmers[pos][b1] = list(kpos_kmer_index[best_start])
+                self.kmer_scheme_data[pos][b1] = list(kpos_kmer_index[best_start])
 
     def get_kseq_by_index(self,index):
         i = 0
@@ -451,6 +454,12 @@ class kmer_worker:
                 return kmer
             i+=1
         return ''
+
+    def remove_scheme_pos(self,pos_to_remove):
+        for pos in pos_to_remove:
+            if pos in self.kmer_scheme_data:
+                del(self.kmer_scheme_data[pos])
+
 
 
 

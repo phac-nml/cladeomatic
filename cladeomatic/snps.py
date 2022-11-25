@@ -161,6 +161,6 @@ def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group
             num_clade_members = num_pos_pos
 
     return {'chrom': chrom, 'pos': pos, 'base': base,
-            'clade_id': best_clade_id, 'is_canonical': is_canonical,
+            'clade_id': best_clade_id, 'is_canonical': is_canonical,'is_valid':True,
             'num_clade_members': num_clade_members, 'num_members': best_clade_num, 'is_ref': is_ref,
             'oddsr': best_oddsr, 'p_value': best_p}

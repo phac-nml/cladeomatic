@@ -45,8 +45,8 @@ def parse_args():
     parser.add_argument('--min_snp_count', type=int, required=False,
                         help='Minimum number of unique snps for a clade to be valid',
                         default=1)
-    parser.add_argument('--max_kmer_count', type=int, required=False,
-                        help='Maximum number of kmers to be selected for each genotype',
+    parser.add_argument('--max_snp_count', type=int, required=False,
+                        help='Maximum number of snps to be selected for each genotype',
                         default=-1)
     parser.add_argument('--min_perc', type=float, required=False,
                         help='Minimum percentage of clade members to be positive for a kmer to be valid', default=1)
@@ -427,7 +427,7 @@ def run():
     root_name = cmd_args.root_name
     klen = cmd_args.klen
     rcor_thresh = cmd_args.rcor_thresh
-    max_kmer_count = cmd_args.max_kmer_count
+    max_snp_count = cmd_args.max_snp_count
     min_snp_count = cmd_args.min_snp_count
     min_member_count = cmd_args.min_members
     min_perc = cmd_args.min_perc
@@ -588,20 +588,26 @@ def run():
 
     logging.info("Recreating fasta sequences from vcf")
     pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
-    create_pseudoseqs_from_vcf(ref_seq_id,ref_seq[ref_seq_id], variant_file, pseudo_seq_file)
+    #create_pseudoseqs_from_vcf(ref_seq_id,ref_seq[ref_seq_id], variant_file, pseudo_seq_file)
 
     #calculate distance matrix
     logging.info("Calculating SNP distance matrix")
     distance_matrix_file = os.path.join(outdir,"{}-dist.mat.txt".format(prefix))
-    run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
+    #run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
 
     #perform clade-snp work
     perform_compression = True
     if no_compression:
         perform_compression = False
+    logging.info("Performing canonical SNP detection")
     cw = clade_worker(variant_file, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
-                      min_snp_count=min_snp_count, max_states=max_states, min_members=min_member_count,
-                 min_inter_clade_dist=1, num_threads=num_threads)
+                      min_snp_count=min_snp_count, max_snps=max_snp_count, max_states=max_states, min_members=min_member_count,
+                 min_inter_clade_dist=1, num_threads=num_threads,rcor_thresh=rcor_thresh)
+
+    logging.info("Read {} variant positions from {}".format(cw.num_positions,variant_file))
+    logging.info("Found {} valid variant positions".format(cw.num_valid_positions))
+    logging.info("Found {} canonical variant positions".format(cw.num_canonical_positions))
+    logging.info("Initial set of {} genotyping positions selected".format(len(cw.selected_positions)))
 
     write_node_report(cw.clade_data, os.path.join(outdir, "{}-clades.info.txt".format(prefix)))
     write_snp_report(cw.snp_data, os.path.join(outdir, "{}-snps.info.txt".format(prefix)))
@@ -617,19 +623,24 @@ def run():
     genotype_map = cw.selected_genotypes
     target_positions = cw.selected_positions
 
-
+    logging.info("Performing kmer selection")
     kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, analysis_dir, prefix, klen, genotype_map, max_ambig=max_ambig, min_perc=min_perc,
                  target_positions=target_positions, num_threads=num_threads)
-
-
 
 
     #Update based on positions which could not be assigned a kmer
     positions_missing_kmer = kw.positions_missing_kmer
     if len(positions_missing_kmer) > 0:
         cw.remove_snps(list(positions_missing_kmer.keys()))
+    logging.info("A total of {} genotyping positions removed due to no valid kmers found".format(len(positions_missing_kmer)))
+    logging.info("Final set of {} genotyping positions selected".format(len(cw.selected_positions)))
     write_genotypes(cw.selected_genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))
 
+    if max_snp_count > 1:
+        cw.prune_snps()
+        variant_pos = set(cw.variant_positions)
+        selected_positions = set(cw.get_selected_positions())
+        kw.remove_scheme_pos(variant_pos - selected_positions)
 
     logging.info("Creating scheme")
     if len(ref_features) > 0:
