@@ -1,4 +1,5 @@
 import sys
+import time
 from Bio import SeqIO
 import random
 from copy import deepcopy
@@ -80,22 +81,26 @@ def simulate(seq,min_num_mutations,max_num_mutations,num_generations,num_childre
             sites[i][b] = 0
         sites[i][seq[i]] = 1
 
-    available_sites = get_available_positions(sites)
+    available_sites = set(get_available_positions(sites))
     children = range(0,num_children)
     sample_id = 1
-
+    occupied_sites = set()
     for i in range(0,num_generations+1):
-        if len(available_sites) == 0:
+        stime = time.time()
+        if len(occupied_sites) == seq_len:
             print("Sequence has no more sites to mutate")
             break
-        print("generation:{}, num seqs:{}".format(i,sample_id))
+
         for k in range(0,len(seq_stack)):
             parent_seq = seq_stack[k]
             if not parent_seq['is_alive']:
                 continue
             parent_seq['is_alive'] = False
-
-            for j in children:
+            if i < 2:
+                c = num_children
+            else:
+                c = random.randrange(1,num_children)
+            for j in range(0,c):
                 mutations = deepcopy(parent_seq['mutations'])
                 if min_num_mutations != max_num_mutations:
                     num_mutations = random.randrange(min_num_mutations,max_num_mutations+1)
@@ -103,17 +108,21 @@ def simulate(seq,min_num_mutations,max_num_mutations,num_generations,num_childre
                     num_mutations = min_num_mutations
 
                 events = range(0, num_mutations)
-                if len(available_sites) == 0:
+                if len(occupied_sites) == seq_len:
                     break
                 for l in events:
-                    pos = random.choice(available_sites)
+                    pos = random.randrange(0,seq_len)
+                    while pos in occupied_sites:
+                        pos = random.randrange(0, seq_len)
+                    #pos = random.choice(available_sites)
                     muts = sites[pos]
                     random.shuffle(bases)
                     for b in bases:
                         if muts[b] == 0:
                             break
                     sites[pos][b] = 1
-                    available_sites = list(set(available_sites) - set([pos]))
+                    #available_sites = available_sites - set([pos])
+                    occupied_sites.add(pos)
                     mutations[pos] = b
                 child = data_struct()
                 child['path'] = "{}.{}".format(parent_seq['path'],k)
@@ -124,12 +133,14 @@ def simulate(seq,min_num_mutations,max_num_mutations,num_generations,num_childre
                 seq_stack.append(child)
 
                 sample_id+=1
-        available_sites = get_available_positions(sites)
+        print("generation:{}, num seqs:{}, time: {}".format(i, sample_id, time.time() - stime))
+        #available_sites = get_available_positions(sites)
     return seq_stack
 
 
 def create_seqs(sim_samples,seq,outfile):
     fh = open(outfile,'w')
+    fh.write(">root.0\n{}\n".format(seq))
     for i in range(0,len(sim_samples)):
         data = sim_samples[i]
         if data['is_alive'] == False:

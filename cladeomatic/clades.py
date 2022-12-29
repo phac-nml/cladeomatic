@@ -1,15 +1,16 @@
-import sys
+import random
+from collections import OrderedDict
 
-import pandas as pd
 import numpy as np
-from cladeomatic.snps import snp_search_controller
-from cladeomatic.utils import fisher_exact
+import pandas as pd
+from scipy.cluster import hierarchy
 from scipy.signal import find_peaks
 from scipy.spatial import distance
-from scipy.cluster import hierarchy
 from scipy.stats import spearmanr, pearsonr
-from collections import OrderedDict
-import random
+
+from cladeomatic.snps import snp_search_controller
+from cladeomatic.utils import fisher_exact
+
 
 class clade_worker:
     vcf_file = None

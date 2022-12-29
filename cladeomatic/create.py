@@ -1,24 +1,26 @@
 import os
-import psutil
 import shutil
 import sys
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
+
 import pandas as pd
+import psutil
 import ray
 from Bio import SeqIO
 from Bio.Seq import Seq
+
+from cladeomatic.clades import clade_worker
 from cladeomatic.constants import SCHEME_HEADER
+from cladeomatic.kmers import kmer_worker
 from cladeomatic.utils import init_console_logger, calc_shanon_entropy
 from cladeomatic.utils import parse_metadata
 from cladeomatic.utils.phylo_tree import parse_tree
 from cladeomatic.utils.seqdata import create_pseudoseqs_from_vcf, parse_reference_gbk, calc_homopolymers
+from cladeomatic.utils.snpdists import run_snpdists
 from cladeomatic.utils.vcfhelper import vcfReader
 from cladeomatic.utils.visualization import create_dist_histo
-from cladeomatic.clades import clade_worker
-from cladeomatic.kmers import kmer_worker
-from cladeomatic.utils.snpdists import run_snpdists
-from cladeomatic.writers import write_snp_report, write_genotypes, write_node_report, print_params, write_scheme
 from cladeomatic.version import __version__
+from cladeomatic.writers import write_snp_report, write_genotypes, write_node_report, print_params, write_scheme
 
 
 def parse_args():
@@ -368,9 +370,15 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     obj['is_valid'] = True
 
                     counts = [0] * num_genotypes
-                    num_found = len(
+                    geno_found = unique_genotypes & (
                         set(kmer_rule_obj[kIndex]['positive_genotypes']) | set(
                             kmer_rule_obj[kIndex]['partial_genotypes']))
+                    num_found = len(geno_found)
+                    if num_genotypes < num_found:
+                        print("{}\t{}\t{}\t{}".format(pos,kIndex,num_genotypes,num_found ))
+                        print(unique_genotypes)
+                        print(set(kmer_rule_obj[kIndex]['positive_genotypes']))
+                        print(set(kmer_rule_obj[kIndex]['partial_genotypes']))
                     for j in range(0, num_found):
                         counts[j] = 1
                     obj['kmer_entropy'] = calc_shanon_entropy(counts)
@@ -588,12 +596,12 @@ def run():
 
     logging.info("Recreating fasta sequences from vcf")
     pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
-    #create_pseudoseqs_from_vcf(ref_seq_id,ref_seq[ref_seq_id], variant_file, pseudo_seq_file)
+    create_pseudoseqs_from_vcf(ref_seq_id,ref_seq[ref_seq_id], variant_file, pseudo_seq_file)
 
     #calculate distance matrix
     logging.info("Calculating SNP distance matrix")
     distance_matrix_file = os.path.join(outdir,"{}-dist.mat.txt".format(prefix))
-    #run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
+    run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
 
     #perform clade-snp work
     perform_compression = True

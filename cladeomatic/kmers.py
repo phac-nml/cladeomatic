@@ -1,4 +1,7 @@
+import time
+
 from Bio import SeqIO
+
 from cladeomatic.utils.kmerSearch import SeqSearchController
 
 
@@ -50,34 +53,71 @@ class kmer_worker:
 
     def workflow(self):
         print(self.target_positions)
+        stime = time.time()
         self.init_msa_base_counts()
+        print(stime - time.time())
+        stime = time.time()
         self.pop_msa_base_counts()
+        print(stime - time.time())
+        stime = time.time()
         self.find_variant_positions()
+        print(stime - time.time())
         if len(self.target_positions) == 0:
             self.target_positions = self.variant_positions
+        stime = time.time()
         self.get_genotype_snp_states()
+        print(stime - time.time())
+        stime = time.time()
         self.get_optimal_kmer_position()
+        print(stime - time.time())
+        stime = time.time()
         self.extract_kmers()
+        print(stime - time.time())
+        stime = time.time()
         self.populate_int_base_kmer_lookup()
+        print(stime - time.time())
+        stime = time.time()
         self.perform_kmer_search()
+        print(stime - time.time())
+        stime = time.time()
         self.process_kmer_results()
+        print(stime - time.time())
+        stime = time.time()
         self.init_kmer_scheme_data()
+        print(stime - time.time())
+        stime = time.time()
         self.populate_kmer_scheme_data()
+        print(stime - time.time())
+        stime = time.time()
 
         self.confirm_kmer_specificity()
+        print(stime - time.time())
 
         # Reinitialize with invalid kmers removed
+        stime = time.time()
         self.init_kmer_scheme_data()
+        print(stime - time.time())
+        stime = time.time()
         self.populate_kmer_scheme_data()
+        print(stime - time.time())
+        stime = time.time()
         self.remove_empty_base_states()
-        print(self.kmer_scheme_data.keys())
+        print(stime - time.time())
+        stime = time.time()
         self.construct_ruleset()
-
+        print(stime - time.time())
+        stime = time.time()
         self.remove_redundant_kmers()
-
+        print(stime - time.time())
+        stime = time.time()
         self.find_invalid_kmers()
+        print(stime - time.time())
+        stime = time.time()
         self.remove_invalid_kmers_from_scheme()
+        print(stime - time.time())
+        stime = time.time()
         self.positions_missing_kmer = self.get_pos_without_kmer()
+        print(stime - time.time())
 
     def init_msa_base_counts(self):
         for i in range(0, self.ref_len):
