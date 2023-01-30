@@ -274,6 +274,8 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
 
     for pos in selected_kmers:
         ref_base = ref_seq[pos]
+        if not ref_base in selected_kmers[pos]:
+            continue
         bases = list(selected_kmers[pos].keys())
         alt_bases = []
 
