@@ -69,6 +69,7 @@ class clade_worker:
         self.rcor_thresh = rcor_thresh
         self.max_snp_count = max_snps
         self.workflow()
+
         return
 
     def workflow(self):
@@ -87,7 +88,8 @@ class clade_worker:
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
         self.calc_node_associations_groups()
-
+        valid_nodes = self.get_valid_nodes()
+        self.set_valid_nodes(valid_nodes)
 
         if self.perform_compression:
             self.set_invalid_nodes(self.get_close_nodes())
@@ -106,6 +108,7 @@ class clade_worker:
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
+
 
 
     def summarize_snps(self):
@@ -138,6 +141,7 @@ class clade_worker:
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_valid']:
                 selected_positions = selected_positions | set(self.clade_data[node_id]['pos'])
+
         return sorted(list(selected_positions))
 
     def set_valid_nodes(self,valid_nodes):
@@ -652,6 +656,17 @@ class clade_worker:
         return ranges
 
     def remove_snps(self,positions):
+        '''
+        THis function removes snps from the valid positions variable in clade data
+        Parameters
+        ----------
+        positions - list of integer positions base 1
+
+        Returns
+        -------
+        None
+
+        '''
         positions = set(positions)
         for node_id in self.clade_data:
             ovl = set(self.clade_data[node_id]['pos']) & positions

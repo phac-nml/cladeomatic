@@ -93,7 +93,6 @@ def snp_search_controller(group_data, vcf_file, n_threads=1):
                     snps[chrom][pos] = {}
                 for base in result[chrom][pos]:
                     snps[chrom][pos][base] = result[chrom][pos][base]
-
     return snps
 
 

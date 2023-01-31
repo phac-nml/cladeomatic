@@ -4,13 +4,17 @@ import sys
 
 tasks = {
     'create': 'Identify population structure and develop typing scheme',
+    'genotype': 'Call genotypes from a VCF and a scheme file',
     'benchmark': 'Test developed scheme using labeled samples and scheme',
+    'namer': 'Rename genotypes within a scheme',
     'test': 'Test cladeomatic functionality on a small dataset',
 }
 
 ordered_tasks = [
     'create',
+    'genotype',
     'benchmark',
+    'namer'
 ]
 
 

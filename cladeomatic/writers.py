@@ -51,7 +51,7 @@ def write_node_report(clade_data, outfile):
     '''
     fh = open(outfile, 'w')
 
-    header = ['clade_id', 'pos', 'base', 'ave_dist', 'is_valid','is_selected', 'closest_clade_id', 'closest_sample_id',
+    header = ['clade_id', 'num_members','pos', 'base', 'ave_dist', 'is_valid','is_selected', 'closest_clade_id', 'closest_sample_id',
               'closest_sample_dist', 'field_name', 'fisher_oddsr', 'fisher_p']
     fh.write("{}\n".format("\t".join([str(x) for x in header])))
 

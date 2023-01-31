@@ -372,17 +372,12 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     obj['is_valid'] = True
 
                     counts = [0] * num_genotypes
-                    geno_found = unique_genotypes & (
-                        set(kmer_rule_obj[kIndex]['positive_genotypes']) | set(
-                            kmer_rule_obj[kIndex]['partial_genotypes']))
+                    geno_found =  set(kmer_rule_obj[kIndex]['positive_genotypes']) | set(
+                            kmer_rule_obj[kIndex]['partial_genotypes'])
                     num_found = len(geno_found)
-                    if num_genotypes < num_found:
-                        print("{}\t{}\t{}\t{}".format(pos,kIndex,num_genotypes,num_found ))
-                        print(unique_genotypes)
-                        print(set(kmer_rule_obj[kIndex]['positive_genotypes']))
-                        print(set(kmer_rule_obj[kIndex]['partial_genotypes']))
                     for j in range(0, num_found):
                         counts[j] = 1
+
                     obj['kmer_entropy'] = calc_shanon_entropy(counts)
                     if max_entropy < obj['kmer_entropy']:
                         max_entropy = obj['kmer_entropy']
@@ -642,7 +637,7 @@ def run():
     positions_missing_kmer = kw.positions_missing_kmer
     if len(positions_missing_kmer) > 0:
         cw.remove_snps(list(positions_missing_kmer.keys()))
-    logging.info("A total of {} genotyping positions removed due to no valid kmers found".format(len(positions_missing_kmer)))
+    logging.info("A total of {} genotyping positions removed due to no valid kmers found: {}".format(len(positions_missing_kmer),positions_missing_kmer))
     logging.info("Final set of {} genotyping positions selected".format(len(cw.selected_positions)))
     write_genotypes(cw.selected_genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))
 
