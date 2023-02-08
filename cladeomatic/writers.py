@@ -113,7 +113,7 @@ def write_snp_report(snp_data, outfile):
     fh.close()
     return
 
-def write_genotypes(genotypes, outfile):
+def write_genotypes(genotypes, outfile,header="sample_id\tgenotype\n"):
     '''
     Accepts a list of sample genotype heirarchies and writes them to a file
     :param genotypes: dict of leaf names with heirarchal list of node id's to represent tree structure
@@ -121,7 +121,7 @@ def write_genotypes(genotypes, outfile):
     :return:
     '''
     fh = open(outfile, 'w')
-    fh.write("sample_id\tgenotype\n")
+    fh.write(header)
     for sample_id in genotypes:
         genotype = genotypes[sample_id]
         fh.write("{}\t{}\n".format(sample_id, genotype))

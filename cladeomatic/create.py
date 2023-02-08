@@ -375,6 +375,8 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     geno_found =  set(kmer_rule_obj[kIndex]['positive_genotypes']) | set(
                             kmer_rule_obj[kIndex]['partial_genotypes'])
                     num_found = len(geno_found)
+                    print(unique_genotypes)
+                    print(geno_found)
                     for j in range(0, num_found):
                         counts[j] = 1
 
@@ -598,7 +600,10 @@ def run():
     #calculate distance matrix
     logging.info("Calculating SNP distance matrix")
     distance_matrix_file = os.path.join(outdir,"{}-dist.mat.txt".format(prefix))
-    run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
+    (stdout,stderr) = run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
+    if not os.path.isfile(distance_matrix_file) or os.path.getsize(distance_matrix_file) < 32:
+        logging.error("snp-dists failed to produce a distance matrix, check the error message and try again:\n{}".format(stderr))
+        sys.exit()
 
     #perform clade-snp work
     perform_compression = True
@@ -640,6 +645,16 @@ def run():
     logging.info("A total of {} genotyping positions removed due to no valid kmers found: {}".format(len(positions_missing_kmer),positions_missing_kmer))
     logging.info("Final set of {} genotyping positions selected".format(len(cw.selected_positions)))
     write_genotypes(cw.selected_genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))
+
+    logging.info("Writting distance based clustering")
+
+    dist_header = "{}\n".format("\t".join(["sample_id"] + ["thresh-{}".format(";".join([str(x) for x in cw.dist_thresholds]))]))
+    dist_nomenclature = {}
+    for sample_id in cw.sample_linkage_clusters:
+        genotype = cw.delim.join([str(x) for x in cw.sample_linkage_clusters[sample_id]])
+        dist_nomenclature[sample_id] = genotype
+    write_genotypes(dist_nomenclature, os.path.join(outdir, "{}-genotypes.distance.txt".format(prefix)),header=dist_header)
+
 
     if max_snp_count > 1:
         cw.prune_snps()

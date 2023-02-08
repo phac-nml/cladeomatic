@@ -28,6 +28,7 @@ class clade_worker:
     method = ''
     rcor_thresh = 0
     max_snp_count = 1
+    max_snp_resolution_thresh = 10
 
     #Derived
     snp_data = {}
@@ -50,9 +51,11 @@ class clade_worker:
     variant_positions = []
     is_root_valid = True
     selected_positions = []
+    sample_dist_based_nomenclature = {}
+    cluster_to_node_mapping = {}
 
 
-    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,method='average',rcor_thresh=0.4):
+    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4):
         self.vcf_file = vcf
         self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq
@@ -68,6 +71,7 @@ class clade_worker:
         self.method = method
         self.rcor_thresh = rcor_thresh
         self.max_snp_count = max_snps
+        self.max_snp_resolution_thresh = max_snp_resolution_thresh
         self.workflow()
 
         return
@@ -103,12 +107,11 @@ class clade_worker:
             self.fix_root()
             valid_nodes = self.get_valid_nodes()
             self.set_valid_nodes(valid_nodes)
-
+            self.compression_cleanup()
         self.dist_based_nomenclature()
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
-
 
 
     def summarize_snps(self):
@@ -134,6 +137,46 @@ class clade_worker:
         self.num_valid_positions = num_valid
         self.num_canonical_positions = num_canonical
         self.variant_positions = variant_pos
+
+
+    def compression_cleanup(self):
+        node_below_threshold = set()
+        for clade_id in self.clade_data:
+            dist = self.clade_data[clade_id]['ave_within_clade_dist']
+            if dist < self.max_snp_resolution_thresh:
+                node_below_threshold.add(clade_id)
+
+        node_to_link_map = {}
+        for link_id in self.cluster_to_node_mapping:
+            node_id = self.cluster_to_node_mapping[link_id]
+            if not node_id in node_to_link_map:
+                node_to_link_map[node_id] = set()
+            node_to_link_map[node_id].add(link_id)
+
+        print(node_to_link_map)
+
+        #Remove nodes which are less than the threshold
+        genotype_assignments = {}
+        for sample_id in self.supported_genotypes:
+            genotype = self.supported_genotypes[sample_id].split(self.delim)
+            if len(genotype) <= 2:
+                continue
+            filt = []
+            for node_id in genotype:
+                if node_id in node_below_threshold:
+                    continue
+                filt.append(node_id)
+            genotype_assignments[sample_id] = filt
+
+        terminal_nodes = set()
+        for sample_id in genotype_assignments:
+            node_id = genotype_assignments[sample_id][-1]
+            terminal_nodes.add(node_id)
+
+        valid_nodes = self.get_valid_nodes() - node_below_threshold
+        valid_nodes = valid_nodes | terminal_nodes
+        self.set_valid_nodes(valid_nodes)
+
 
 
     def get_selected_positions(self):
@@ -179,11 +222,12 @@ class clade_worker:
 
     def get_node_member_counts(self):
         counts = {}
-        for sample_id in self.group_data:
-            for n in self.group_data[sample_id]:
-                if n not in counts:
-                    counts[n] = 0
-                counts[n]+=1
+        for sample_id in self.group_data['sample_map']:
+            genotype = self.group_data['sample_map'][sample_id]['genotype'].split(self.delim)
+            for g in genotype:
+                if g not in counts:
+                    counts[g] = 0
+                counts[g]+=1
         self.node_counts = counts
 
     def init_clade_data(self):
@@ -430,6 +474,9 @@ class clade_worker:
                     bins[i].add(node_id)
         self.node_bins = bins
 
+
+
+
     def compress_heirarchy(self):
         node_bins = self.node_bins
         genotypes = self.generate_genotypes()
@@ -599,6 +646,7 @@ class clade_worker:
         self.dist_ranges = self.identify_dist_ranges()
         self.perform_clustering()
         clust_to_node_mapping = self.fit_clusters_to_groupings()
+        self.cluster_to_node_mapping = clust_to_node_mapping
         sample_genotypes = {}
         for sample_id in self.sample_linkage_clusters:
             clust_geno = self.sample_linkage_clusters[sample_id]
@@ -614,6 +662,7 @@ class clade_worker:
             else:
                 filt = node_geno
             sample_genotypes[sample_id] = self.delim.join(filt)
+        self.sample_dist_based_nomenclature = sample_genotypes
 
     def find_dist_troughs(self,values):
         '''
