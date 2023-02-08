@@ -156,8 +156,11 @@ class kmer_worker:
                     s = pos - klen + 1
                     if s < 0:
                         s = 0
-                    start_range = (s, pos)
-                    for start in start_range:
+                    start_range = range(s, pos)
+
+                    for start_pos in start_range:
+                        start = start_pos
+
                         end = start + klen
                         kseq = seq[start:end + 1]
                         min_ambig = kseq.count('N')
@@ -196,6 +199,7 @@ class kmer_worker:
             handle.close()
         self.extracted_kmers = selected_kmers
         self.num_extracted_kmers = len(selected_kmers)
+
 
     def perform_kmer_search(self):
         seqkmers = {}

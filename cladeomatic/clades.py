@@ -94,6 +94,7 @@ class clade_worker:
         self.calc_node_associations_groups()
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
+        self.dist_based_nomenclature()
 
         if self.perform_compression:
             self.set_invalid_nodes(self.get_close_nodes())
@@ -108,7 +109,7 @@ class clade_worker:
             valid_nodes = self.get_valid_nodes()
             self.set_valid_nodes(valid_nodes)
             self.compression_cleanup()
-        self.dist_based_nomenclature()
+
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
@@ -152,8 +153,6 @@ class clade_worker:
             if not node_id in node_to_link_map:
                 node_to_link_map[node_id] = set()
             node_to_link_map[node_id].add(link_id)
-
-        print(node_to_link_map)
 
         #Remove nodes which are less than the threshold
         genotype_assignments = {}

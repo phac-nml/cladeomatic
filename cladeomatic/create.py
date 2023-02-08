@@ -371,12 +371,14 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     obj['is_kmer_unique'] = True
                     obj['is_valid'] = True
 
+                    kmer_rule_obj[kIndex]['positive_genotypes'] = list(unique_genotypes & set(kmer_rule_obj[kIndex]['positive_genotypes']))
+                    kmer_rule_obj[kIndex]['partial_genotypes'] = list(
+                        unique_genotypes & set(kmer_rule_obj[kIndex]['partial_genotypes']))
                     counts = [0] * num_genotypes
                     geno_found =  set(kmer_rule_obj[kIndex]['positive_genotypes']) | set(
                             kmer_rule_obj[kIndex]['partial_genotypes'])
                     num_found = len(geno_found)
-                    print(unique_genotypes)
-                    print(geno_found)
+
                     for j in range(0, num_found):
                         counts[j] = 1
 
@@ -636,6 +638,24 @@ def run():
     logging.info("Performing kmer selection")
     kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, analysis_dir, prefix, klen, genotype_map, max_ambig=max_ambig, min_perc=min_perc,
                  target_positions=target_positions, num_threads=num_threads)
+
+    kmers = kw.extracted_kmers
+    fh = open(os.path.join(outdir,"{}-extracted.kmers.txt".format(prefix)),'w')
+    fh.write("kseq\taln_start\taln_end\tis_valid\ttarget_positions\tgenotype\tgenotype_count\n")
+    for kseq in kmers:
+        for genotype in kmers[kseq]['genotype_counts']:
+            count = kmers[kseq]['genotype_counts'][genotype]
+            row = [
+                kseq,
+                kmers[kseq]['aln_start'],
+                kmers[kseq]['aln_end'],
+                kmers[kseq]['is_valid'],
+                ";".join([str(x) for x in kmers[kseq]['target_positions']]),
+                genotype,
+                count
+            ]
+            fh.write("{}\n".format("\t".join([str(x) for x in row])))
+    fh.close()
 
 
     #Update based on positions which could not be assigned a kmer
