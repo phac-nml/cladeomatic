@@ -1,3 +1,5 @@
+import sys
+
 import ray
 from cladeomatic.version import __version__
 from cladeomatic.utils.vcfhelper import vcfReader
@@ -141,7 +143,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             continue
         if not sample_id in variants:
             continue
-        genotype = metadata[sample_id]['genotype']
+
         result[sample_id] = {
             'predicted_genotype(s)':[],
             'predicted_genotype_dist': 1,
@@ -157,7 +159,6 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
         for pos in variants[sample_id]:
             found_base = set(variants[sample_id][pos])
             if '*' in found_base  or '-' in found_base or 'N' in found_base:
-
                 continue
 
             for genotype in genotype_rules:
@@ -177,8 +178,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             total = matches + mismatches
             if total > 0:
                 dists[genotype] = 1 - matches /total
-
-
+                
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
         pdist = 1
         for genotype in result[sample_id]['genoytpe_dists']:
@@ -230,6 +230,8 @@ def run():
     for genotype in genotype_rules:
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
+
+
     rule_id = ray.put(genotype_rules)
     num_genotypes = len(genotype_rules)
 
@@ -272,7 +274,7 @@ def run():
     fh = open(outfile,'w')
     header = ['sampleid','predicted_genotype']
     for field in fields:
-        header.append([field])
+        header.append(field)
 
     fh.write("{}\n".format("\t".join([str(x) for x in header])))
     num_fields = len(fields)

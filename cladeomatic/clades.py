@@ -110,6 +110,9 @@ class clade_worker:
             self.set_valid_nodes(valid_nodes)
             self.compression_cleanup()
 
+        for node_id in self.group_data['valid_nodes']:
+            if node_id in self.clade_data:
+                self.clade_data[node_id]['is_valid'] = True
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
@@ -183,7 +186,7 @@ class clade_worker:
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_valid']:
                 selected_positions = selected_positions | set(self.clade_data[node_id]['pos'])
-
+            print("{}\t{}\t{}".format(node_id,self.clade_data[node_id]['is_valid'],self.clade_data[node_id]['pos']))
         return sorted(list(selected_positions))
 
     def set_valid_nodes(self,valid_nodes):
