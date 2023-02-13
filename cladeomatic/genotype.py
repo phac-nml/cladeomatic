@@ -130,8 +130,7 @@ def parse_scheme_genotypes(scheme_file):
                 int1 = a1[pos] & a2[pos]
                 if len(int1) == 1:
                     dist+=1
-            if dist == 0:
-                print("{}\t{}\t{}".format(g1,g2,dist))
+
 
     return scheme
 
@@ -169,19 +168,13 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
 
                 else:
                     genoytpe_results[genotype]['mismatch'][pos] = found_base
-            if sample_id == 'ERR025688':
-                print("{}\t{}".format(pos,found_base))
 
-        if sample_id == 'ERR025688':
-            sys.exit()
         for genotype in genoytpe_results:
             matches = len(genoytpe_results[genotype]['match'])
             mismatches = len(genoytpe_results[genotype]['mismatch'])
             total = matches + mismatches
             if total > 0:
                 dists[genotype] = 1 - matches /total
-            if sample_id == 'ERR025688':
-                print("{}\t{}\t{}\t{}".format(sample_id,genotype,dists[genotype],genoytpe_results[genotype]['mismatch']))
 
                 
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
@@ -236,7 +229,6 @@ def run():
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
 
-    print(genotype_rules['0.1'])
 
     rule_id = ray.put(genotype_rules)
     num_genotypes = len(genotype_rules)
