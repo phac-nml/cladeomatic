@@ -662,6 +662,7 @@ def run():
     positions_missing_kmer = kw.positions_missing_kmer
     if len(positions_missing_kmer) > 0:
         cw.remove_snps(list(positions_missing_kmer.keys()))
+        cw.update()
     logging.info("A total of {} genotyping positions removed due to no valid kmers found: {}".format(len(positions_missing_kmer),positions_missing_kmer))
     logging.info("Final set of {} genotyping positions selected".format(len(cw.selected_positions)))
     write_genotypes(cw.selected_genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))

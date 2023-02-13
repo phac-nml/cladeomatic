@@ -117,6 +117,11 @@ class clade_worker:
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
 
+    def update(self):
+        self.check_nodes()
+        valid_nodes = self.get_valid_nodes()
+        self.set_valid_nodes(valid_nodes)
+        self.supported_genotypes = self.generate_genotypes()
 
     def summarize_snps(self):
         num_canonical = 0
@@ -186,7 +191,6 @@ class clade_worker:
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_valid']:
                 selected_positions = selected_positions | set(self.clade_data[node_id]['pos'])
-            print("{}\t{}\t{}".format(node_id,self.clade_data[node_id]['is_valid'],self.clade_data[node_id]['pos']))
         return sorted(list(selected_positions))
 
     def set_valid_nodes(self,valid_nodes):
@@ -605,7 +609,6 @@ class clade_worker:
         sl_cluster_membership = self.create_cluster_membership_lookup()
         for sl_clust_id in sl_cluster_membership:
             clust_members = sl_cluster_membership[sl_clust_id]
-            num_members = len(clust_members)
             best_node_id = '0'
             best_node_nonmembers = len(self.group_data['membership'])
             for node_id in self.group_data['membership']:
