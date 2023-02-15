@@ -119,7 +119,8 @@ def parse_scheme_genotypes(scheme_file):
 
     genotypes = list(scheme.keys())
 
-    for i in range(0,len(genotypes)):
+    '''
+        for i in range(0,len(genotypes)):
         g1 = genotypes[i]
         a1 = scheme[g1]['allowed']
         for k in range(i+1,len(genotypes)):
@@ -130,6 +131,8 @@ def parse_scheme_genotypes(scheme_file):
                 int1 = a1[pos] & a2[pos]
                 if len(int1) == 1:
                     dist+=1
+    '''
+
 
 
     return scheme
@@ -228,6 +231,7 @@ def run():
     for genotype in genotype_rules:
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
+
 
 
     rule_id = ray.put(genotype_rules)

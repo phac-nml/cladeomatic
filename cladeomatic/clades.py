@@ -30,6 +30,7 @@ class clade_worker:
     max_snp_count = 1
     max_snp_resolution_thresh = 10
 
+
     #Derived
     snp_data = {}
     num_positions = 0
@@ -55,7 +56,9 @@ class clade_worker:
     cluster_to_node_mapping = {}
 
 
-    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4):
+    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',
+                 min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,
+                 max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4):
         self.vcf_file = vcf
         self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq

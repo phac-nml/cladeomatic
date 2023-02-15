@@ -52,6 +52,8 @@ def parse_args():
                         default=-1)
     parser.add_argument('--min_perc', type=float, required=False,
                         help='Minimum percentage of clade members to be positive for a kmer to be valid', default=1)
+    parser.add_argument('--max_site_ambig', type=float, required=False,
+                        help='Maximum percentage of input sequences which can be mising a site for it to still be valid', default=0.25)
     parser.add_argument('--max_states', type=int, required=False,
                         help='Maximum number of states for a position [A,T,C,G,N,-]',
                         default=6)
@@ -423,6 +425,71 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
         filt.append(scheme[i])
     return scheme
 
+def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
+    vcf = vcfReader(input_vcf)
+    data = vcf.process_row()
+    samples = vcf.samples
+    num_samples = len(samples)
+    if data is None:
+        shutil.copy(input_vcf,output_vcf)
+        return
+
+    invalid_positions = {
+
+    }
+    while data is not None:
+        chrom = data['#CHROM']
+        if not chrom in invalid_positions:
+            invalid_positions[chrom] = []
+        pos = int(data['POS']) - 1
+        base_counts = {
+            'A':0,
+            'T':0,
+            'C':0,
+            'G':0,
+            'N':0
+        }
+        for sample_id in samples:
+            base = data[sample_id]
+            if base not in ['A','T','C','G']:
+                base = 'N'
+            base_counts[base]+=1
+
+        if base_counts['N'] / num_samples > max_missing:
+            invalid_positions[chrom].append(pos)
+
+        count_states = 0
+        for base in ['A','T','C','G']:
+            if base_counts[base] > 0:
+                count_states+=1
+
+        if count_states == 1 or count_states > max_states:
+            invalid_positions[chrom].append(pos)
+
+
+    del(vcf)
+
+    in_fh = open(input_vcf,'r')
+    out_fh = open(input_vcf,'w')
+    for line in in_fh:
+        line = line.rstrip()
+        row = line.split("\t")
+        if len(row) == 0:
+            continue
+        if len(row) < 2:
+            out_fh.write("{}\n".format(line))
+            continue
+        chrom = row[0]
+        pos = row[1]
+        if chrom in invalid_positions:
+            if pos in invalid_positions[chrom]:
+                continue
+        out_fh.write("{}\n".format(line))
+    in_fh.close()
+    out_fh.close()
+
+    return
+
 def run():
     cmd_args = parse_args()
     tree_file = cmd_args.in_nwk
@@ -447,6 +514,7 @@ def run():
     max_ambig = cmd_args.max_ambig
     no_compression = cmd_args.no_compression
     force = cmd_args.force
+    max_site_ambig = cmd_args.max_site_ambig
 
     logging = init_console_logger(3)
 
@@ -607,16 +675,21 @@ def run():
         logging.error("snp-dists failed to produce a distance matrix, check the error message and try again:\n{}".format(stderr))
         sys.exit()
 
+    #Filter vcf of invalid sites
+    ##max_site_ambig
+    filtered_vcf = os.path.join(outdir,"{}-filted.vcf".format(prefix))
+    filter_vcf(variant_file, filtered_vcf, max_states, max_site_ambig)
+
     #perform clade-snp work
     perform_compression = True
     if no_compression:
         perform_compression = False
     logging.info("Performing canonical SNP detection")
-    cw = clade_worker(variant_file, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
+    cw = clade_worker(filtered_vcf, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
                       min_snp_count=min_snp_count, max_snps=max_snp_count, max_states=max_states, min_members=min_member_count,
                  min_inter_clade_dist=1, num_threads=num_threads,rcor_thresh=rcor_thresh)
 
-    logging.info("Read {} variant positions from {}".format(cw.num_positions,variant_file))
+    logging.info("Read {} variant positions from {}".format(cw.num_positions,filtered_vcf))
     logging.info("Found {} valid variant positions".format(cw.num_valid_positions))
     logging.info("Found {} canonical variant positions".format(cw.num_canonical_positions))
     logging.info("Initial set of {} genotyping positions selected".format(len(cw.selected_positions)))
