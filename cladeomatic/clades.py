@@ -130,6 +130,7 @@ class clade_worker:
         num_canonical = 0
         num_valid = 0
         variant_pos = []
+        num_positions = 0
         for chrom in self.snp_data:
             num_positions = len(self.snp_data[chrom])
             for pos in self.snp_data[chrom]:

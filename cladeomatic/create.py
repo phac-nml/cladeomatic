@@ -466,11 +466,13 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
         if count_states == 1 or count_states > max_states:
             invalid_positions[chrom].append(pos)
 
+        data = vcf.process_row()
 
     del(vcf)
 
     in_fh = open(input_vcf,'r')
-    out_fh = open(input_vcf,'w')
+    out_fh = open(output_vcf,'w')
+    count_snps_removed = 0
     for line in in_fh:
         line = line.rstrip()
         row = line.split("\t")
@@ -483,12 +485,13 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
         pos = row[1]
         if chrom in invalid_positions:
             if pos in invalid_positions[chrom]:
+                count_snps_removed+=1
                 continue
         out_fh.write("{}\n".format(line))
     in_fh.close()
     out_fh.close()
 
-    return
+    return count_snps_removed
 
 def run():
     cmd_args = parse_args()
@@ -677,8 +680,10 @@ def run():
 
     #Filter vcf of invalid sites
     ##max_site_ambig
-    filtered_vcf = os.path.join(outdir,"{}-filted.vcf".format(prefix))
-    filter_vcf(variant_file, filtered_vcf, max_states, max_site_ambig)
+    logging.info("Filtering VCF to remove sites which have > {} variants per site or > {} missing".format(max_states,max_site_ambig))
+    filtered_vcf = os.path.join(outdir,"{}-filtered.vcf".format(prefix))
+    count_snps_removed = filter_vcf(variant_file, filtered_vcf, max_states, max_site_ambig)
+    logging.info("Removed {} SNPs from analysis and filtered vcf written to {}".format(count_snps_removed,filtered_vcf))
 
     #perform clade-snp work
     perform_compression = True
