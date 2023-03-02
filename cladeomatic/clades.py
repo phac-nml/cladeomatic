@@ -1,6 +1,6 @@
 import random
 from collections import OrderedDict
-
+from cladeomatic.utils.vcfhelper import vcfReader
 import numpy as np
 import pandas as pd
 from scipy.cluster import hierarchy
@@ -29,10 +29,12 @@ class clade_worker:
     rcor_thresh = 0
     max_snp_count = 1
     max_snp_resolution_thresh = 10
-
+    min_perc = 1
 
     #Derived
     snp_data = {}
+    selected_pos_ref_states = {}
+    genotype_snp_data = {}
     num_positions = 0
     num_valid_positions = 0
     num_canonical_positions = 0
@@ -54,11 +56,12 @@ class clade_worker:
     selected_positions = []
     sample_dist_based_nomenclature = {}
     cluster_to_node_mapping = {}
+    genotype_snp_rules = {}
 
 
     def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',
                  min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,
-                 max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4):
+                 max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4,min_perc=1):
         self.vcf_file = vcf
         self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq
@@ -75,6 +78,7 @@ class clade_worker:
         self.rcor_thresh = rcor_thresh
         self.max_snp_count = max_snps
         self.max_snp_resolution_thresh = max_snp_resolution_thresh
+        self.min_perc = min_perc
         self.workflow()
 
         return
@@ -119,6 +123,8 @@ class clade_worker:
         self.selected_genotypes = self.generate_genotypes()
         self.selected_positions = self.get_selected_positions()
         self.temporal_signal()
+        self.set_genotype_snp_states()
+        self.set_genotype_snp_rules()
 
     def update(self):
         self.check_nodes()
@@ -150,7 +156,6 @@ class clade_worker:
         self.num_valid_positions = num_valid
         self.num_canonical_positions = num_canonical
         self.variant_positions = variant_pos
-
 
     def compression_cleanup(self):
         node_below_threshold = set()
@@ -187,8 +192,6 @@ class clade_worker:
         valid_nodes = self.get_valid_nodes() - node_below_threshold
         valid_nodes = valid_nodes | terminal_nodes
         self.set_valid_nodes(valid_nodes)
-
-
 
     def get_selected_positions(self):
         selected_positions = set()
@@ -483,9 +486,6 @@ class clade_worker:
                 if d <= t:
                     bins[i].add(node_id)
         self.node_bins = bins
-
-
-
 
     def compress_heirarchy(self):
         node_bins = self.node_bins
@@ -938,6 +938,79 @@ class clade_worker:
             self.clade_data[node_id]['bases'] = bases
 
         self.selected_positions = self.get_selected_positions()
+
+    def set_genotype_snp_states(self):
+        selected_positions = self.selected_positions
+        vcf = vcfReader(self.vcf_file)
+        data = vcf.process_row()
+        samples = vcf.samples
+        sample_genotypes = self.selected_genotypes
+        genotype_data = {}
+        for sample_id in sample_genotypes:
+            genotype = sample_genotypes[sample_id]
+            if not genotype in genotype_data:
+                genotype_data[genotype] = {
+                    'genotype_count':0,
+                    'base_counts':{}
+                }
+            genotype_data[genotype]['genotype_count']+=1
+            for pos in selected_positions:
+                genotype_data[genotype]['base_counts'][pos] = {
+                    'A': 0,
+                    'T': 0,
+                    'C': 0,
+                    'G': 0,
+                    'N': 0
+                }
+
+        if data is None:
+            return {}
+
+        while data is not None:
+            ref = data['REF']
+            pos = int(data['POS']) - 1
+            if pos not in selected_positions:
+                data = vcf.process_row()
+                continue
+            self.selected_pos_ref_states[pos] = ref
+            for sample_id in samples:
+                base = data[sample_id]
+                genotype = sample_genotypes[sample_id]
+                if base not in ['A', 'T', 'C', 'G']:
+                    base = 'N'
+                genotype_data[genotype]['base_counts'][pos][base] += 1
+            data = vcf.process_row()
+
+        self.genotype_snp_data = genotype_data
+        del (vcf)
+
+    def set_genotype_snp_rules(self):
+        valid_bases = ["A","T","C","G"]
+        rules = {}
+        for pos in self.selected_positions:
+            rules[pos] = {}
+            for base in valid_bases:
+                rules[pos][base] = {'positive_genotypes': [], 'partial_genotypes': []}
+
+            for genotype in self.genotype_snp_data:
+                total = self.genotype_snp_data[genotype]['genotype_count']
+                if total == 0:
+                    continue
+                for base in valid_bases:
+                    p = self.genotype_snp_data[genotype]['base_counts'][pos][base] / total
+                    if p >= self.min_perc:
+                        rules[pos][base]['positive_genotypes'].append(genotype)
+                    elif p > 0:
+                        rules[pos][base]['partial_genotypes'].append(genotype)
+        self.genotype_snp_rules = rules
+
+    def get_genotype_snp_rules(self):
+        return self.genotype_snp_rules
+
+
+
+
+
 
 
 

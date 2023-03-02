@@ -425,6 +425,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
         filt.append(scheme[i])
     return scheme
 
+
 def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     vcf = vcfReader(input_vcf)
     data = vcf.process_row()
@@ -482,7 +483,11 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
             out_fh.write("{}\n".format(line))
             continue
         chrom = row[0]
-        pos = row[1]
+        if chrom == 'CHROM' or not row[1].isnumeric():
+            out_fh.write("{}\n".format(line))
+            continue
+
+        pos = int(row[1]) - 1
         if chrom in invalid_positions:
             if pos in invalid_positions[chrom]:
                 count_snps_removed+=1
@@ -492,6 +497,147 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     out_fh.close()
 
     return count_snps_removed
+
+def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
+    sample_genotypes = clade_obj.selected_genotypes
+    perf_annotation = True
+    ref_id = list(ref_features.keys())[0]
+    ref_seq = ''
+    if not 'features' in ref_features[ref_id]:
+        perf_annotation = False
+        ref_seq = ref_features[ref_id]
+    else:
+        ref_seq = ref_features[ref_id]['features']['source']
+
+    unique_genotypes = set(sample_genotypes.values())
+    num_genotypes = len(unique_genotypes)
+    scheme = []
+    max_entropy = -1
+    mutation_keys = {}
+    row_index = 0
+    rules = clade_obj.get_genotype_snp_rules()
+    selected_pos_ref_states = clade_obj.selected_pos_ref_states
+    valid_bases = ["A","T","C","G"]
+    scheme = []
+    for pos in selected_pos_ref_states:
+        ref_base = selected_pos_ref_states[pos]
+        alt_bases = []
+        bases_present = []
+        for base in valid_bases:
+            if len(rules[pos][base]['positive_genotypes'] ) > 0 or len(rules[pos][base]['partial_genotypes'] ):
+                bases_present.append(base)
+                if base != ref_base:
+                    alt_bases.append(base)
+
+        for i in range(0, len(alt_bases)):
+            alt_base = alt_bases[i]
+            mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
+            for k in range(0, len(bases_present)):
+                base = bases_present[k]
+                dna_name = "{}{}{}".format(ref_base, pos + 1, base)
+                row_obj = {}
+                for field_id in header:
+                    row_obj[field_id] = ''
+                if perf_annotation:
+                    gene_feature = find_overlaping_gene_feature(pos, pos, ref_features, ref_id)
+                else:
+                    gene_feature = None
+                    gene_name = 'Intergenic'
+
+                ref_var_aa = ''
+                alt_var_aa = ''
+                is_cds = False
+                gene_name = ''
+                is_silent = True
+                aa_name = ''
+                aa_var_start = -1
+                if gene_feature is not None:
+                    is_cds = True
+                    gene_name = gene_feature['gene_name']
+                    positions = gene_feature['positions']
+                    gene_start = -1
+                    gene_end = -1
+                    for s, e in positions:
+                        if gene_start == -1:
+                            gene_start = s
+                            gene_end = e
+                        else:
+                            if gene_start > s:
+                                gene_start = s
+                            if gene_end < e:
+                                gene_end = e
+                    gene_seq = ref_seq[gene_start:gene_end + 1]
+                    rel_var_start = abs(pos - gene_start)
+                    aa_var_start = int(rel_var_start / 3)
+                    codon_var_start = aa_var_start * 3
+                    codon_var_end = codon_var_start + 3
+                    ref_var_dna = gene_seq[codon_var_start:codon_var_end]
+                    ref_var_aa = str(Seq(ref_var_dna).translate(table=trans_table))
+                    mod_gene_seq = list(ref_seq[gene_start:gene_end + 1])
+                    mod_gene_seq[rel_var_start] = base
+                    alt_var_dna = ''.join(mod_gene_seq[codon_var_start:codon_var_end])
+                    alt_var_aa = str(Seq(alt_var_dna).translate(table=trans_table))
+                    aa_name = "{}{}{}".format(ref_var_aa, aa_var_start + 1, alt_var_aa)
+                    if alt_var_aa != ref_var_aa:
+                        is_silent = False
+
+                row_obj['key'] = row_index
+                row_obj['mutation_key'] = mutation_key
+                row_obj['dna_name'] = dna_name
+                row_obj['variant_start'] = pos + 1
+                row_obj['variant_end'] = pos + 1
+                row_obj['kmer_start'] = -1
+                row_obj['kmer_end'] = -1
+                row_obj['target_variant'] = base
+                row_obj['target_variant_len'] = 1
+                row_obj['mutation_type'] = 'snp'
+                row_obj['ref_state'] = ref_base
+                row_obj['alt_state'] = alt_base
+                state = 'ref'
+                if base == alt_base and base != ref_base:
+                    state = 'alt'
+                row_obj['state'] = state
+                row_obj['kseq'] = ''
+                row_obj['klen'] = 0
+                row_obj['homopolymer_len'] = 0
+                row_obj['is_ambig_ok'] = True
+                row_obj['is_kmer_found'] = True
+                row_obj['is_kmer_length_ok'] = True
+                row_obj['is_kmer_unique'] = True
+                row_obj['is_valid'] = True
+
+                if gene_feature is not None:
+                    row_obj['gene_start'] = gene_start + 1
+                    row_obj['gene_end'] = gene_end + 1
+                    row_obj['cds_start'] = codon_var_start + 1
+                    row_obj['cds_end'] = codon_var_end
+                    row_obj['aa_name'] = aa_name
+                    row_obj['aa_start'] = aa_var_start + 1
+                    row_obj['aa_end'] = aa_var_start + 1
+
+                row_obj['is_cds'] = is_cds
+                row_obj['is_frame_shift'] = False
+                row_obj['is_silent'] = is_silent
+                row_obj['is_cds'] = is_cds
+                row_obj['is_frame_shift'] = False
+                row_obj['is_silent'] = is_silent
+                row_obj['positive_genotypes'] = ",".join(sorted(rules[pos][base]['positive_genotypes']))
+                row_obj['partial_genotypes'] = ",".join(sorted(rules[pos][base]['partial_genotypes']))
+
+                counts = [0] * num_genotypes
+                geno_found = set(rules[pos][base]['partial_genotypes']) | set(rules[pos][base]['positive_genotypes'])
+                num_found = len(geno_found)
+
+                for j in range(0, num_found):
+                    counts[j] = 1
+                row_obj['kmer_entropy'] = calc_shanon_entropy(counts)
+                if max_entropy < row_obj['kmer_entropy']:
+                    max_entropy = row_obj['kmer_entropy']
+                scheme.append(row_obj)
+                row_index+=1
+
+    return scheme
+
 
 def run():
     cmd_args = parse_args()
@@ -764,13 +910,19 @@ def run():
     logging.info("Creating scheme")
     if len(ref_features) > 0:
         scheme = create_scheme(SCHEME_HEADER,ref_features,kw,cw.selected_genotypes,trans_table=11)
+        snp_scheme = create_snp_scheme(SCHEME_HEADER,ref_features,cw,trans_table=11)
     else:
         scheme = create_scheme(SCHEME_HEADER, ref_seq, kw, cw.selected_genotypes, trans_table=11)
+        snp_scheme = create_snp_scheme(SCHEME_HEADER, ref_seq, cw, trans_table=11)
 
     write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-scheme.txt".format(prefix)))
+    write_scheme(SCHEME_HEADER, snp_scheme, os.path.join(outdir, "{}-snp.scheme.txt".format(prefix)))
 
     if not keep_tmp:
-        logging.info("Removing temporary analysis folder")
+        logging.info("Removing temporary analysis folder: {}".format(analysis_dir))
         shutil.rmtree(analysis_dir)
+
+
+
 
     logging.info("Analysis complete")
