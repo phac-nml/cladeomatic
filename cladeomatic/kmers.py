@@ -68,6 +68,7 @@ class kmer_worker:
         self.populate_kmer_scheme_data()
         self.confirm_kmer_specificity()
 
+
         # Reinitialize with invalid kmers removed
         self.init_kmer_scheme_data()
         self.populate_kmer_scheme_data()
@@ -77,6 +78,7 @@ class kmer_worker:
         self.find_invalid_kmers()
         self.remove_invalid_kmers_from_scheme()
         self.positions_missing_kmer = self.get_pos_without_kmer()
+        self.refine_rules()
 
     def init_msa_base_counts(self):
         for i in range(0, self.ref_len):
@@ -223,6 +225,7 @@ class kmer_worker:
                 genoytpe = genotype_mapping[seq_id]
                 kIndex = int(line[1])
                 count = int(line[2])
+
                 if count == 0:
                     continue
                 if count > 1:
@@ -268,6 +271,7 @@ class kmer_worker:
                 scheme_data[pos][base].append(index)
             index += 1
 
+
     def get_pos_without_kmer(self):
         missing = {}
         for pos in self.kmer_scheme_data:
@@ -310,7 +314,76 @@ class kmer_worker:
                 elif g > 0:
                     kmer_rules[index]['partial_genotypes'].append(genotype)
             index += 1
+
+
         self.rule_set = kmer_rules
+
+    def refine_rules(self):
+        '''
+        Missing data can cause kmers to all be partial when there isn't an alternative kmer available for a genotype
+        This filters the rules to assign kmers to be positive for a genotype when there is only one kmer base state present for it
+        Returns
+        -------
+
+        '''
+        kmer_rules = self.rule_set
+        for pos in self.kmer_scheme_data:
+            if pos == 0:
+                continue
+            positive_genos = {'A': set(), 'T': set(), 'C': set(), 'G': set()}
+            partial_genos = {'A': set(), 'T': set(), 'C': set(), 'G': set()}
+            target_genotypes = set()
+            genos_with_positive_kmer = set()
+            for base in self.kmer_scheme_data[pos]:
+                for kIndex in self.kmer_scheme_data[pos][base]:
+                    positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
+                    partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
+                    target_genotypes = target_genotypes | positive_genos[base] |  partial_genos[base]
+                    genos_with_positive_kmer = genos_with_positive_kmer | positive_genos[base]
+                positive_genos[base] = set(positive_genos[base])
+                positive_genos[base] = set(positive_genos[base])
+
+            genotypes_to_check = target_genotypes - genos_with_positive_kmer
+            for genotype in genotypes_to_check:
+                bases_present = []
+                for base in partial_genos:
+                    if genotype in partial_genos[base]:
+                        bases_present.append(base)
+                if len(bases_present) > 1:
+                    continue
+                for base in bases_present:
+                    affected_kmers = []
+
+                    for kIndex in self.kmer_scheme_data[pos][base]:
+                        if genotype in kmer_rules[kIndex]['partial_genotypes']:
+                            affected_kmers.append(kIndex)
+
+                    for kIndex in affected_kmers:
+                            r = set(kmer_rules[kIndex]['partial_genotypes'])
+                            r = r - set(genotype)
+                            kmer_rules[kIndex]['partial_genotypes'] = list(r)
+                            kmer_rules[kIndex]['positive_genotypes'].append(genotype)
+
+        for kIndex in kmer_rules:
+            kmer_rules[kIndex]['positive_genotypes'] = sorted(kmer_rules[kIndex]['positive_genotypes'])
+            kmer_rules[kIndex]['partial_genotypes'] = sorted(kmer_rules[kIndex]['partial_genotypes'])
+
+
+        self.rule_set = kmer_rules
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def get_genotype_snp_states(self):
         with open(self.msa_fasta_file, "r") as handle:
