@@ -78,13 +78,13 @@ def parse_args():
 
 def validate_file(file):
     '''
-    Parameters
+    Parameters file
     ----------
     file
     Returns
     -------
     '''
-    if os.path.isfile(file) and os.path.getsize(file) > 9:
+    if os.path.isfile(file) and os.path.getsize(file) > 32:
         return True
     else:
         return False
