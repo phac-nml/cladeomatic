@@ -638,6 +638,49 @@ def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
 
     return scheme
 
+def format_biohansel_scheme(biohansel_kmers,clade_obj):
+    valid_nodes = clade_obj.get_valid_nodes()
+    node_heirarchy = {}
+    delim = clade_obj.delim
+    for sample_id in clade_obj.selected_genotypes:
+        genotype = clade_obj.selected_genotypes[sample_id].split(delim)
+        for i in range(0,len(genotype)):
+            node_id = genotype[i]
+            h = ".".join([str(x) for x in genotype[0:i+1]])
+            node_heirarchy[node_id] = h
+
+    clade_data = clade_obj.clade_data
+    scheme = {'fasta':{},'meta':{}}
+    for clade_id in valid_nodes:
+        for i in range(0,len(clade_data[clade_id]['pos'])):
+            p = clade_data[clade_id]['pos'][i]
+            b = clade_data[clade_id]['bases'][i]
+            if p in biohansel_kmers:
+                start = biohansel_kmers[p][b]['start']
+                if biohansel_kmers[p][b]['positive'] != '':
+                    pid = "{}-{}".format(start,node_heirarchy[clade_id])
+                    scheme['meta'][pid] = {'pos':p,'target_base':b}
+                    scheme['fasta'][pid] = biohansel_kmers[p][b]['positive']
+                if biohansel_kmers[p][b]['negative'] != '':
+                    nid = "negative{}-{}".format(start, node_heirarchy[clade_id])
+                    scheme['fasta'][nid] = biohansel_kmers[p][b]['negative']
+                    scheme['meta'][nid] = {'pos': p, 'target_base': b}
+
+    return scheme
+
+def write_biohansel_scheme(scheme,fasta_file):
+    fh = open(fasta_file,'w')
+    for id in scheme:
+        fh.write(">{}\n{}\n".format(id,scheme[id]))
+    fh.close()
+
+def write_biohansel_meta(scheme,out_file):
+    fh = open(out_file,'w')
+    fh.write("kmername\ttarget_pos\ttarget_base\n")
+    for id in scheme:
+        fh.write("{}\t{}\t{}\n".format(id,scheme[id]['pos'],scheme[id]['target_base']))
+    fh.close()
+
 
 def run():
     cmd_args = parse_args()
@@ -917,6 +960,10 @@ def run():
 
     write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-scheme.txt".format(prefix)))
     write_scheme(SCHEME_HEADER, snp_scheme, os.path.join(outdir, "{}-snp.scheme.txt".format(prefix)))
+
+    bh_data = format_biohansel_scheme(kw.biohansel_kmers, cw)
+    write_biohansel_scheme(bh_data['fasta'], os.path.join(outdir, "{}-biohansel.fasta".format(prefix)))
+    write_biohansel_meta(bh_data['meta'], os.path.join(outdir, "{}-biohansel.meta.txt".format(prefix)))
 
     if not keep_tmp:
         logging.info("Removing temporary analysis folder: {}".format(analysis_dir))

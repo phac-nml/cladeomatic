@@ -1,5 +1,5 @@
 import sys
-
+import os
 import ray
 from cladeomatic.version import __version__
 from cladeomatic.utils.vcfhelper import vcfReader
@@ -20,7 +20,8 @@ def parse_args():
                         help='Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)')
     parser.add_argument('--in_scheme', type=str, required=True, help='Tab delimited scheme file produced by clade-o-matic',
                         default=None)
-    parser.add_argument('--in_meta', type=str, required=True, help='Tab delimited genotype metadata', default=None)
+    parser.add_argument('--sample_meta', type=str, required=True, help='Tab delimited sample metadata', default=None)
+    parser.add_argument('--genotype_meta', type=str, required=False, help='Tab delimited genotype metadata', default=None)
     parser.add_argument('--outfile', type=str, required=True, help='Output Directory to put results')
     parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
@@ -63,8 +64,6 @@ def get_snp_profiles(valid_positions, vcf_file):
 def parse_scheme_genotypes(scheme_file):
     scheme = {}
     df = pd.read_csv(scheme_file, sep="\t", header=0, low_memory=False)
-    variant_positions = list(df['variant_start'].unique())
-    geno_seqs = {}
     snp_states = {}
     for row in df.itertuples():
         target_variant = row.target_variant
@@ -116,25 +115,6 @@ def parse_scheme_genotypes(scheme_file):
                 allowed_bases = snp_states[pos]
             scheme[genotype]['allowed'][pos] = allowed_bases
 
-
-    genotypes = list(scheme.keys())
-
-    '''
-        for i in range(0,len(genotypes)):
-        g1 = genotypes[i]
-        a1 = scheme[g1]['allowed']
-        for k in range(i+1,len(genotypes)):
-            g2 = genotypes[k]
-            dist = 0
-            a2 = scheme[g2]['allowed']
-            for pos in a1:
-                int1 = a1[pos] & a2[pos]
-                if len(int1) == 1:
-                    dist+=1
-    '''
-
-
-
     return scheme
 
 @ray.remote
@@ -178,6 +158,8 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             total = matches + mismatches
             if total > 0:
                 dists[genotype] = 1 - matches /total
+            if genotype == '1.5z':
+                print("{}\t{}\t{}".format(sample_id,genotype,genoytpe_results[genotype]['mismatch']))
 
                 
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
@@ -205,11 +187,56 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
 
     return result
 
+def write_genotype_calls(outfile,sample_meta_fields,sample_metadata,genotype_results,genotype_meta):
+    fh = open(outfile, 'w')
+    header = ['sampleid', 'predicted_genotype']
+    for field in sample_meta_fields:
+        header.append(field)
+
+    fh.write("{}\n".format("\t".join([str(x) for x in header])))
+    num_sample_fields = len(sample_meta_fields)
+    genotype_meta_fields = set()
+    for genotype in genotype_meta:
+        for field in genotype_meta[genotype]:
+            genotype_meta_fields.add(field)
+    genotype_meta_fields = sorted(list(genotype_meta_fields))
+    num_genotype_fields = len(genotype_meta_fields)
+    for sample_id in genotype_results:
+        genotypes = ",".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']])
+        row = [
+            sample_id,
+            genotypes,
+        ]
+
+        for i in range(0, num_sample_fields):
+            field_name = sample_meta_fields[i]
+            row.append(sample_metadata[sample_id][field_name])
+
+        if genotypes in genotype_meta:
+            for i in range(0,num_genotype_fields):
+                field_name = num_genotype_fields[i]
+                row.append(genotype_meta[sample_id][field_name])
+        else:
+            for i in range(0, num_genotype_fields):
+                row.append("")
+
+        fh.write("{}\n".format("\t".join(row)))
+
+    fh.close()
+
+def is_valid_file(filename):
+    status = True
+    if not os.path.isfile(filename) or os.path.getsize(filename) <= 32:
+        status = False
+    return status
+
+
 def run():
     cmd_args = parse_args()
     scheme_file = cmd_args.in_scheme
     variant_file = cmd_args.in_var
-    metadata_file = cmd_args.in_meta
+    metadata_file = cmd_args.sample_meta
+    genotype_meta_file = cmd_args.genotype_meta
     outfile = cmd_args.outfile
     num_threads = cmd_args.num_threads
 
@@ -221,22 +248,34 @@ def run():
     logging.info("Starting analysis")
 
     logging.info("Reading metadata file {}".format(metadata_file))
-    metadata = parse_metadata(metadata_file)
-    fields = list(metadata[list(metadata.keys())[0]].keys())
+    if not is_valid_file(metadata_file):
+        logging.error("Error file {} was not found or is empty".format(metadata_file))
+        sys.exit()
+    sample_metadata = parse_metadata(metadata_file)
+    sample_meta_fields = list(sample_metadata[list(sample_metadata.keys())[0]].keys())
 
+    genotype_metadata = {}
+    if genotype_meta_file is not None:
+        if not is_valid_file(genotype_meta_file):
+            logging.error("Error file {} was not found or is empty".format(genotype_meta_file))
+            sys.exit()
+        logging.info("Reading metadata file {}".format(genotype_meta_file))
+        genotype_metadata = parse_metadata(genotype_meta_file)
 
 
     logging.info("Reading scheme file {}".format(scheme_file))
+    if not is_valid_file(scheme_file):
+        logging.error("Error file {} was not found or is empty".format(scheme_file))
+        sys.exit()
+
+
     genotype_rules = parse_scheme_genotypes(scheme_file)
     for genotype in genotype_rules:
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
 
-
-
     rule_id = ray.put(genotype_rules)
     num_genotypes = len(genotype_rules)
-
 
     valid_positions = []
     for genotype in genotype_rules:
@@ -245,19 +284,19 @@ def run():
     valid_positions = list(set(valid_positions))
 
     logging.info("Extracted {} genotyping positions".format(len(valid_positions)))
-
     logging.info("Reading snp data from vcf file {}".format(variant_file))
     variants = get_snp_profiles(valid_positions, variant_file)
 
-    logging.info("Calling genotypes for {} samples based on {} genotypes".format(len(metadata),num_genotypes))
-    batch_size = int(len(metadata) / num_threads)
+
+    logging.info("Calling genotypes for {} samples based on {} genotypes".format(len(sample_metadata),num_genotypes))
+    batch_size = int(len(sample_metadata) / num_threads)
     ray_results = []
     if batch_size < 1:
         batch_size = 1
     sub_metadata = {}
     sub_variants = {}
-    for sample_id in metadata:
-        sub_metadata[sample_id] = metadata[sample_id]
+    for sample_id in sample_metadata:
+        sub_metadata[sample_id] = sample_metadata[sample_id]
         sub_variants[sample_id] = variants[sample_id]
         if len(sub_metadata) == batch_size:
             ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
@@ -266,38 +305,13 @@ def run():
     if len(sub_metadata) > 0:
         ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
     results = ray.get(ray_results)
-    genoytpe_results = {}
+    genotype_results = {}
     for r in results:
         for sample_id in r:
-            genoytpe_results[sample_id] = r[sample_id]
+            genotype_results[sample_id] = r[sample_id]
     del(results)
     del(ray_results)
 
-    fh = open(outfile,'w')
-    header = ['sampleid','predicted_genotype']
-    for field in fields:
-        header.append(field)
-
-    fh.write("{}\n".format("\t".join([str(x) for x in header])))
-    num_fields = len(fields)
-    for sample_id in genoytpe_results:
-        genotypes = [str(x) for x in genoytpe_results[sample_id]['predicted_genotype(s)']]
-        row = [
-            sample_id,
-            ",".join(genotypes),
-        ]
-        for i in range(0,num_fields):
-            field_name = fields[i]
-            contents = []
-            for g in genotypes:
-                value = ''
-                if g in metadata and field_name in metadata[g]:
-                    value = metadata[g][field_name]
-                contents.append(value)
-            row.append(";".join([str(x) for x in contents]))
-        fh.write("{}\n".format("\t".join(row)))
-
-    fh.close()
-
+    write_genotype_calls(outfile, sample_meta_fields, sample_metadata, genotype_results, genotype_metadata)
     logging.info("Analysis complete")
 

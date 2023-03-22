@@ -53,8 +53,12 @@ def parse_reference_gbk(gbk_file):
     sequences = {}
     with open(gbk_file) as handle:
         for record in GenBank.parse(handle):
-            gb_accession = record.accession[0]
-            gb_accession_version = gb_accession[1]
+            gb_accession = record.locus
+            gb_accession_version = 1
+            if len(record.accession) == 2:
+                gb_accession = record.accession[0]
+                gb_accession_version = gb_accession[1]
+
             genome_seq = repr(record.sequence).replace("\'",'')
             sequences[gb_accession] = {
                 'accession':gb_accession,

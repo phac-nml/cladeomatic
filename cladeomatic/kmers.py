@@ -4,7 +4,7 @@ import time
 from Bio import SeqIO
 
 from cladeomatic.utils.kmerSearch import SeqSearchController
-
+from cladeomatic.constants import IUPAC_LOOK_UP
 
 class kmer_worker:
     # input
@@ -34,7 +34,7 @@ class kmer_worker:
     invalid_kmer_indexes = set()
     int_base_kmer_lookup = {}
     positions_missing_kmer = {}
-
+    biohansel_kmers = {}
 
     def __init__(self, ref_sequence, msa_file, result_dir, prefix, klen, genotype_map, max_ambig=0, min_perc=1,
                  target_positions=[], num_threads=1):
@@ -79,6 +79,7 @@ class kmer_worker:
         self.remove_invalid_kmers_from_scheme()
         self.positions_missing_kmer = self.get_pos_without_kmer()
         self.refine_rules()
+        self.biohansel_kmers = self.create_biohansel_kmers()
 
     def init_msa_base_counts(self):
         for i in range(0, self.ref_len):
@@ -371,20 +372,6 @@ class kmer_worker:
 
         self.rule_set = kmer_rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def get_genotype_snp_states(self):
         with open(self.msa_fasta_file, "r") as handle:
             for record in SeqIO.parse(handle, "fasta"):
@@ -495,7 +482,8 @@ class kmer_worker:
                     partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
                 positive_genos[base] = set(positive_genos[base])
                 positive_genos[base] = set(positive_genos[base])
-
+            optimal_starts = []
+            selected_kmers = set()
             for i in range(0, num_bases):
                 b1 = bases[i]
                 if b1 not in self.kmer_scheme_data[pos]:
@@ -522,7 +510,15 @@ class kmer_worker:
                 kpos_inf_scores = {k: v for k, v in
                                    sorted(kpos_inf_scores.items(), key=lambda item: item[1], reverse=True)}
                 best_start = list(kpos_inf_scores.keys())[0]
-                self.kmer_scheme_data[pos][b1] = list(kpos_kmer_index[best_start])
+                optimal_starts.append(best_start)
+                selected_kmers = selected_kmers | set(kpos_kmer_index[best_start])
+
+            for i in range(0, num_bases):
+                b1 = bases[i]
+                if b1 not in self.kmer_scheme_data[pos]:
+                    continue
+                self.kmer_scheme_data[pos][b1] = list(set(self.kmer_scheme_data[pos][b1]) & selected_kmers)
+
 
     def get_kseq_by_index(self,index):
         i = 0
@@ -538,6 +534,92 @@ class kmer_worker:
                 del(self.kmer_scheme_data[pos])
 
 
+    def calc_consensus_seq(self):
+        consensus = []
+        valid_bases = ['A','T','C','G']
+        for pos in self.msa_base_counts:
+            bases = []
+            for b in valid_bases:
+                count = self.msa_base_counts[pos][b]
+                if count > 0:
+                    bases.append(b)
+            bases = "".join(sorted(bases))
+            c = IUPAC_LOOK_UP[bases]
+            consensus.append(c)
+        return "".join(consensus)
+
+    def create_biohansel_kmers(self):
+        kmers = {}
+        valid_bases = ['A', 'T', 'C', 'G']
+        consensus = list(self.calc_consensus_seq())
+        ref = self.ref_sequence
+        opt_kstart_pos = self.opt_kmer_start_positions
+        msa_len = len(consensus)
+        klen = self.kmer_len
+        for pos in self.target_positions:
+            if pos in self.positions_missing_kmer:
+                continue
+            kmers[pos] = {
+                'A':{'positive':'','negative':'','start':-1,'end':-1,'genotype':''},
+                'T':{'positive':'','negative':'','start':-1,'end':-1,'genotype':''},
+                'C':{'positive':'','negative':'','start':-1,'end':-1,'genotype':''},
+                'G':{'positive':'','negative':'','start':-1,'end':-1,'genotype':''},
+            }
+            ref_base = ref[pos]
+            cons_base = consensus[pos]
+            bases = []
+            for b in valid_bases:
+                count = self.msa_base_counts[pos][b]
+                if count > 0:
+                    bases.append(b)
+            alt_bases = set(bases) - set(ref_base)
+            num_alt_bases = len(alt_bases)
+            kStart = pos - klen + 1
+            if kStart < 0:
+                kStart = 0
+            kEnd = pos + klen + 1
+            if kEnd >= msa_len:
+                kEnd = msa_len - 1
+            pos_ovl_variant = set(range(kStart,kEnd) ) & set(opt_kstart_pos)
+            if len(pos_ovl_variant) == 0:
+                pos_ovl_variant = set(kStart)
+            pos_ovl_variant = list(pos_ovl_variant)
+            if len(pos_ovl_variant) < num_alt_bases:
+                for i in range(0,num_alt_bases-len(pos_ovl_variant)):
+                    kStart = pos_ovl_variant[-1] + 1
+                    pos_ovl_variant.append(kStart)
+
+            if num_alt_bases == 0:
+                kStart = pos_ovl_variant[0]
+                kEnd = kStart + klen + 1
+                ref_kmer = consensus[kStart:kEnd]
+                kmers[pos][base]['positive'] = ''.join(ref_kmer)
+                kmers[pos][base]['start'] = kStart
+                kmers[pos][base]['end'] = kEnd
+                continue
+            alt_bases = list(alt_bases)
+            for i in range(0,len(alt_bases)):
+                kStart = pos_ovl_variant[i]
+                kEnd = kStart + klen + 1
+                base = alt_bases[i]
+                consensus[pos] = base
+                alt_kmer = ''.join(consensus[kStart:kEnd])
+                out_bases = set(bases) - set(base)
+                iupac_key = []
+                for b in valid_bases:
+                    if b in out_bases:
+                        iupac_key.append(b)
+                iupac_key = ''.join(iupac_key)
+                consensus[pos] = IUPAC_LOOK_UP[iupac_key]
+                ref_kmer = consensus[kStart:kEnd]
+                kmers[pos][base]['positive'] = alt_kmer
+                kmers[pos][base]['negative'] = ''.join(ref_kmer)
+                kmers[pos][base]['start'] = kStart
+                kmers[pos][base]['end'] = kEnd
+
+            consensus[pos] = cons_base
+
+        return kmers
 
 
 

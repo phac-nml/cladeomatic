@@ -61,7 +61,7 @@ class clade_worker:
 
     def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',
                  min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,
-                 max_snp_resolution_thresh=10,method='average',rcor_thresh=0.4,min_perc=1):
+                 max_snp_resolution_thresh=0,method='average',rcor_thresh=0.4,min_perc=1):
         self.vcf_file = vcf
         self.metadata_dict = metadata_dict
         self.ref_seq = ref_seq
@@ -85,6 +85,7 @@ class clade_worker:
 
     def workflow(self):
         self.raw_genotypes = self.generate_genotypes()
+        print(self.raw_genotypes)
         self.snp_data = snp_search_controller(self.group_data, self.vcf_file, self.num_threads)
         self.summarize_snps()
         self.variant_positions = self.get_variant_positions()
@@ -98,11 +99,13 @@ class clade_worker:
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
+        print(self.supported_genotypes)
         self.calc_node_associations_groups()
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.dist_based_nomenclature()
-
+        self.selected_genotypes = self.generate_genotypes()
+        print(self.selected_genotypes)
         if self.perform_compression:
             self.set_invalid_nodes(self.get_close_nodes())
             self.get_bifurcating_nodes()
@@ -185,7 +188,9 @@ class clade_worker:
             genotype_assignments[sample_id] = filt
 
         terminal_nodes = set()
+        print(genotype_assignments)
         for sample_id in genotype_assignments:
+            print("{}\t{}".format(sample_id,genotype_assignments[sample_id]))
             node_id = genotype_assignments[sample_id][-1]
             terminal_nodes.add(node_id)
 
