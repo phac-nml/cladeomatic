@@ -78,7 +78,7 @@ IUPAC_LOOK_UP = {
     'GTA': 'D',
     'TAG': 'D',
     'GAT': 'D',
-    'AGT': 'D',
+    'ATG': 'D',
         'ACT': 'H',
     'CTA': 'H',
     'TCA': 'H',
