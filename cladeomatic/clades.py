@@ -30,6 +30,7 @@ class clade_worker:
     max_snp_count = 1
     max_snp_resolution_thresh = 10
     min_perc = 1
+    mode = None
 
     #Derived
     snp_data = {}
@@ -59,7 +60,7 @@ class clade_worker:
     genotype_snp_rules = {}
 
 
-    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,perform_compression=True,delim='.',
+    def __init__(self,vcf,metadata_dict,dist_mat_file,groups,ref_seq,mode,perform_compression=True,delim='.',
                  min_snp_count=1,max_snps=-1,max_states=6,min_members=1,min_inter_clade_dist=1,num_threads=1,
                  max_snp_resolution_thresh=0,method='average',rcor_thresh=0.4,min_perc=1):
         self.vcf_file = vcf
@@ -79,13 +80,13 @@ class clade_worker:
         self.max_snp_count = max_snps
         self.max_snp_resolution_thresh = max_snp_resolution_thresh
         self.min_perc = min_perc
+        self.mode = mode
         self.workflow()
 
         return
 
     def workflow(self):
         self.raw_genotypes = self.generate_genotypes()
-        print(self.raw_genotypes)
         self.snp_data = snp_search_controller(self.group_data, self.vcf_file, self.num_threads)
         self.summarize_snps()
         self.variant_positions = self.get_variant_positions()
@@ -99,13 +100,13 @@ class clade_worker:
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
-        print(self.supported_genotypes)
         self.calc_node_associations_groups()
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.dist_based_nomenclature()
         self.selected_genotypes = self.generate_genotypes()
-        print(self.selected_genotypes)
+
+
         if self.perform_compression:
             self.set_invalid_nodes(self.get_close_nodes())
             self.get_bifurcating_nodes()
@@ -119,6 +120,10 @@ class clade_worker:
             valid_nodes = self.get_valid_nodes()
             self.set_valid_nodes(valid_nodes)
             self.compression_cleanup()
+        elif self.mode == 'tree':
+            self.fix_root()
+            valid_nodes = self.get_valid_nodes()
+            self.set_valid_nodes(valid_nodes)
 
         for node_id in self.group_data['valid_nodes']:
             if node_id in self.clade_data:
@@ -988,6 +993,7 @@ class clade_worker:
 
         self.genotype_snp_data = genotype_data
         del (vcf)
+
 
     def set_genotype_snp_rules(self):
         valid_bases = ["A","T","C","G"]

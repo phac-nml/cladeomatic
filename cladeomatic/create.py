@@ -51,7 +51,7 @@ def parse_args():
                         help='Maximum number of snps to be selected for each genotype',
                         default=-1)
     parser.add_argument('--min_perc', type=float, required=False,
-                        help='Minimum percentage of clade members to be positive for a kmer to be valid', default=1)
+                        help='Minimum percentage of clade members to be positive for a kmer to be valid', default=0.1)
     parser.add_argument('--max_site_ambig', type=float, required=False,
                         help='Maximum percentage of input sequences which can be mising a site for it to still be valid', default=0.25)
     parser.add_argument('--max_states', type=int, required=False,
@@ -301,6 +301,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                 for kIndex in selected_kmers[pos][base]:
                     obj = {}
                     kseq = kmer_worker.get_kseq_by_index(kIndex)
+
                     for field_id in header:
                         obj[field_id] = ''
                     start = kmer_info[kIndex]['aln_start']
@@ -423,6 +424,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
         if scheme[i]['mutation_key'] in mutations_keys_to_remove:
             continue
         filt.append(scheme[i])
+
     return scheme
 
 
@@ -879,10 +881,10 @@ def run():
     if no_compression:
         perform_compression = False
     logging.info("Performing canonical SNP detection")
-    cw = clade_worker(filtered_vcf, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], perform_compression=perform_compression,delim=delim,
+    cw = clade_worker(filtered_vcf, metadata , distance_matrix_file, group_data, ref_seq[ref_seq_id], mode,perform_compression=perform_compression,delim=delim,
                       min_snp_count=min_snp_count, max_snps=max_snp_count, max_states=max_states, min_members=min_member_count,
                  min_inter_clade_dist=1, num_threads=num_threads,rcor_thresh=rcor_thresh)
-
+    snp_genotype_rules = cw.get_genotype_snp_rules()
     logging.info("Read {} variant positions from {}".format(cw.num_positions,filtered_vcf))
     logging.info("Found {} valid variant positions".format(cw.num_valid_positions))
     logging.info("Found {} canonical variant positions".format(cw.num_canonical_positions))
@@ -903,7 +905,7 @@ def run():
     target_positions = cw.selected_positions
 
     logging.info("Performing kmer selection")
-    kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, analysis_dir, prefix, klen, genotype_map, max_ambig=max_ambig, min_perc=min_perc,
+    kw = kmer_worker(ref_seq[ref_seq_id], pseudo_seq_file, analysis_dir, prefix, klen, genotype_map, snp_genotype_rules,max_ambig=max_ambig, min_perc=min_perc,
                  target_positions=target_positions, num_threads=num_threads)
 
     kmers = kw.extracted_kmers
@@ -958,7 +960,7 @@ def run():
         scheme = create_scheme(SCHEME_HEADER, ref_seq, kw, cw.selected_genotypes, trans_table=11)
         snp_scheme = create_snp_scheme(SCHEME_HEADER, ref_seq, cw, trans_table=11)
 
-    write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-scheme.txt".format(prefix)))
+    write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-kmer.scheme.txt".format(prefix)))
     write_scheme(SCHEME_HEADER, snp_scheme, os.path.join(outdir, "{}-snp.scheme.txt".format(prefix)))
 
     bh_data = format_biohansel_scheme(kw.biohansel_kmers, cw)

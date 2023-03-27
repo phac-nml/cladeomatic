@@ -35,8 +35,9 @@ class kmer_worker:
     int_base_kmer_lookup = {}
     positions_missing_kmer = {}
     biohansel_kmers = {}
+    genotype_snp_rules = {}
 
-    def __init__(self, ref_sequence, msa_file, result_dir, prefix, klen, genotype_map, max_ambig=0, min_perc=1,
+    def __init__(self, ref_sequence, msa_file, result_dir, prefix, klen, genotype_map, genotype_snp_rules,max_ambig=0, min_perc=1,
                  target_positions=[], num_threads=1):
         self.ref_sequence = ref_sequence
         self.ref_len = len(ref_sequence)
@@ -49,6 +50,7 @@ class kmer_worker:
         self.result_dir = result_dir
         self.prefix = prefix
         self.genotype_membership = genotype_map
+        self.genotype_snp_rules = genotype_snp_rules
         self.workflow()
         return
 
@@ -80,6 +82,7 @@ class kmer_worker:
         self.positions_missing_kmer = self.get_pos_without_kmer()
         self.refine_rules()
         self.biohansel_kmers = self.create_biohansel_kmers()
+
 
     def init_msa_base_counts(self):
         for i in range(0, self.ref_len):
@@ -203,7 +206,6 @@ class kmer_worker:
         self.extracted_kmers = selected_kmers
         self.num_extracted_kmers = len(selected_kmers)
 
-
     def perform_kmer_search(self):
         seqkmers = {}
         index = 0
@@ -272,7 +274,6 @@ class kmer_worker:
                 scheme_data[pos][base].append(index)
             index += 1
 
-
     def get_pos_without_kmer(self):
         missing = {}
         for pos in self.kmer_scheme_data:
@@ -303,6 +304,7 @@ class kmer_worker:
         index = 0
         for kmer in kmer_info:
             kmer_rules[index] = {'positive_genotypes': [], 'partial_genotypes': []}
+
             genotype_data = kmer_info[kmer]['genotype_counts']
             for genotype in genotype_data:
                 if not genotype in genotype_counts:
@@ -328,6 +330,13 @@ class kmer_worker:
 
         '''
         kmer_rules = self.rule_set
+        #get all defined geneotypes in the snp scheme
+        genotypes_defined = set()
+        for pos in self.genotype_snp_rules:
+            for base in self.genotype_snp_rules[pos]:
+                genotypes_defined = genotypes_defined | set(self.genotype_snp_rules[pos][base]['positive_genotypes']) \
+                                    | set(self.genotype_snp_rules[pos][base]['partial_genotypes'])
+
         for pos in self.kmer_scheme_data:
             if pos == 0:
                 continue
@@ -335,14 +344,30 @@ class kmer_worker:
             partial_genos = {'A': set(), 'T': set(), 'C': set(), 'G': set()}
             target_genotypes = set()
             genos_with_positive_kmer = set()
+            snp_rule = self.genotype_snp_rules[pos]
             for base in self.kmer_scheme_data[pos]:
                 for kIndex in self.kmer_scheme_data[pos][base]:
                     positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
                     partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
                     target_genotypes = target_genotypes | positive_genos[base] |  partial_genos[base]
                     genos_with_positive_kmer = genos_with_positive_kmer | positive_genos[base]
+
                 positive_genos[base] = set(positive_genos[base])
                 positive_genos[base] = set(positive_genos[base])
+
+            genos_missing_rule = genotypes_defined - target_genotypes
+            for genotype in genos_missing_rule:
+                for base in snp_rule:
+                    if genotype in snp_rule[base]:
+                        break
+                if len(self.kmer_scheme_data[pos][base]) == 1:
+                    genos_with_positive_kmer = genos_with_positive_kmer | genotype
+                    for kIndex in self.kmer_scheme_data[pos][base]:
+                        kmer_rules[kIndex]['positive_genotypes'].append(genotype)
+                else:
+                    for kIndex in self.kmer_scheme_data[pos][base]:
+                        kmer_rules[kIndex]['partial_genotypes'].append(genotype)
+
 
             genotypes_to_check = target_genotypes - genos_with_positive_kmer
             for genotype in genotypes_to_check:
@@ -366,9 +391,8 @@ class kmer_worker:
                             kmer_rules[kIndex]['positive_genotypes'].append(genotype)
 
         for kIndex in kmer_rules:
-            kmer_rules[kIndex]['positive_genotypes'] = sorted(kmer_rules[kIndex]['positive_genotypes'])
-            kmer_rules[kIndex]['partial_genotypes'] = sorted(kmer_rules[kIndex]['partial_genotypes'])
-
+            kmer_rules[kIndex]['positive_genotypes'] = sorted(list(set(kmer_rules[kIndex]['positive_genotypes'])))
+            kmer_rules[kIndex]['partial_genotypes'] = sorted(list(set(kmer_rules[kIndex]['partial_genotypes'])))
 
         self.rule_set = kmer_rules
 

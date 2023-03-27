@@ -121,8 +121,7 @@ def parse_scheme_genotypes(scheme_file):
 def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
     result = {}
     for sample_id in metadata:
-        if not 'genotype' in metadata[sample_id]:
-            continue
+
         if not sample_id in variants:
             continue
 
@@ -158,11 +157,10 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             total = matches + mismatches
             if total > 0:
                 dists[genotype] = 1 - matches /total
-            if genotype == '1.5z':
-                print("{}\t{}\t{}".format(sample_id,genotype,genoytpe_results[genotype]['mismatch']))
 
                 
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
+
         pdist = 1
         for genotype in result[sample_id]['genoytpe_dists']:
             dist =  result[sample_id]['genoytpe_dists'][genotype]
@@ -182,14 +180,14 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
                         is_substring = True
                 if not is_substring:
                     filt.append(result[sample_id]['predicted_genotype(s)'][i])
-            result[sample_id]['predicted_genotype(s)'] = filt
+            #result[sample_id]['predicted_genotype(s)'] = filt
         del result[sample_id]['genoytpe_dists']
 
     return result
 
 def write_genotype_calls(outfile,sample_meta_fields,sample_metadata,genotype_results,genotype_meta):
     fh = open(outfile, 'w')
-    header = ['sampleid', 'predicted_genotype']
+    header = ['sample_id', 'predicted_genotype']
     for field in sample_meta_fields:
         header.append(field)
 
@@ -305,6 +303,7 @@ def run():
     if len(sub_metadata) > 0:
         ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
     results = ray.get(ray_results)
+
     genotype_results = {}
     for r in results:
         for sample_id in r:
