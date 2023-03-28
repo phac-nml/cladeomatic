@@ -568,8 +568,11 @@ class kmer_worker:
                 count = self.msa_base_counts[pos][b]
                 if count > 0:
                     bases.append(b)
-            bases = "".join(sorted(bases))
-            c = IUPAC_LOOK_UP[bases]
+            if len(bases) ==0:
+                c = '-'
+            else:
+                bases = "".join(sorted(bases))
+                c = IUPAC_LOOK_UP[bases]
             consensus.append(c)
         return "".join(consensus)
 

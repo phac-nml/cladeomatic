@@ -683,6 +683,23 @@ def write_biohansel_meta(scheme,out_file):
         fh.write("{}\t{}\t{}\n".format(id,scheme[id]['pos'],scheme[id]['target_base']))
     fh.close()
 
+def create_alt_psedo_sequence(ref_seq,positions,outfile):
+    alt_seq = list(ref_seq)
+    bases = ['A','T','C','G']
+    basesr = range(0,len(bases))
+    for pos in positions:
+        base = alt_seq[pos]
+        for i in basesr:
+            if basesr[i] != base:
+                alt_seq[pos] = bases[i]
+                break
+    alt_seq = ''.join(alt_seq)
+    fh = open(outfile,'w')
+    fh.write(">alt_seq\n{}\n".format(alt_seq))
+    fh.close()
+
+
+
 
 def run():
     cmd_args = parse_args()
@@ -972,5 +989,6 @@ def run():
 
 
 
+    create_alt_psedo_sequence(ref_seq[ref_seq_id], cw.selected_positions, os.path.join(outdir,"{}-altseq.fasta".format(prefix)))
 
     logging.info("Analysis complete")
