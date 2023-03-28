@@ -193,9 +193,8 @@ class clade_worker:
             genotype_assignments[sample_id] = filt
 
         terminal_nodes = set()
-        print(genotype_assignments)
+
         for sample_id in genotype_assignments:
-            print("{}\t{}".format(sample_id,genotype_assignments[sample_id]))
             node_id = genotype_assignments[sample_id][-1]
             terminal_nodes.add(node_id)
 

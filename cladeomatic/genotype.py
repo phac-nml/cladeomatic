@@ -7,6 +7,8 @@ from cladeomatic.utils import init_console_logger
 from cladeomatic.utils import parse_metadata
 import pandas as pd
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
+from cladeomatic.constants import GENOTYPE_REPORT_HEADER
+from datetime import datetime
 
 
 def parse_args():
@@ -129,7 +131,8 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
             'predicted_genotype(s)':[],
             'predicted_genotype_dist': 1,
             'genoytpe_results':{},
-            'genoytpe_dists': {}
+            'genoytpe_dists': {},
+
         }
         genoytpe_results = {}
         dists = {}
@@ -170,53 +173,60 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
                 result[sample_id]['predicted_genotype_dist'] = dist
                 pdist = dist
 
-        num_geno = len(result[sample_id]['predicted_genotype(s)'])
-        if num_geno > 1:
-            filt = []
-            for i in range(0,num_geno):
-                is_substring = False
-                for k in range(i+1,num_geno):
-                    if "{}.".format(result[sample_id]['predicted_genotype(s)'][i]) in result[sample_id]['predicted_genotype(s)'][k]:
-                        is_substring = True
-                if not is_substring:
-                    filt.append(result[sample_id]['predicted_genotype(s)'][i])
-            #result[sample_id]['predicted_genotype(s)'] = filt
+        filt = {}
+        for genotype in result[sample_id]['predicted_genotype(s)']:
+            filt[genotype] = result[sample_id]['genoytpe_dists'][genotype]
+            result[sample_id]['genoytpe_dists'] = {
+                'match':genoytpe_results[genotype]['match'],
+                'mismatch':genoytpe_results[genotype]['mismatch']
+            }
+        result[sample_id]['genoytpe_dists'] = filt
+
         del result[sample_id]['genoytpe_dists']
 
     return result
 
-def write_genotype_calls(outfile,sample_meta_fields,sample_metadata,genotype_results,genotype_meta):
-    fh = open(outfile, 'w')
-    header = ['sample_id', 'predicted_genotype']
-    for field in sample_meta_fields:
-        header.append(field)
+def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_metadata,genotype_meta):
 
-    fh.write("{}\n".format("\t".join([str(x) for x in header])))
-    num_sample_fields = len(sample_meta_fields)
-    genotype_meta_fields = set()
+    #get all additional_fields
+    sample_fields = set()
+    for sample_id in sample_metadata:
+        for field in sample_metadata[sample_id]:
+            sample_fields.add(field)
+    sample_fields = sorted(list(sample_fields))
+
+    genotype_fields = set()
     for genotype in genotype_meta:
         for field in genotype_meta[genotype]:
-            genotype_meta_fields.add(field)
-    genotype_meta_fields = sorted(list(genotype_meta_fields))
-    num_genotype_fields = len(genotype_meta_fields)
+            genotype_fields.add(field)
+    genotype_fields = sorted(list(genotype_fields))
+
+    header = header + sample_fields + genotype_fields
+
+    #initialize file
+    fh = open(outfile, 'w')
+    fh.write("{}\n".format("\t".join([str(x) for x in header])))
+
+    analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     for sample_id in genotype_results:
-        genotypes = ",".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']])
-        row = [
-            sample_id,
-            genotypes,
-        ]
-
-        for i in range(0, num_sample_fields):
-            field_name = sample_meta_fields[i]
-            row.append(sample_metadata[sample_id][field_name])
-
-        if genotypes in genotype_meta:
-            for i in range(0,num_genotype_fields):
-                field_name = num_genotype_fields[i]
-                row.append(genotype_meta[sample_id][field_name])
+        row = {}
+        for field_id in header:
+            row[field_id] = ''
+        row['sample_id'] = sample_id
+        row['predicted_genotype(s)'] = '-'
+        row['scheme'] = scheme_name
+        row['analysis_date'] = analysis_date
+        if len(genotype_results[sample_id]['predicted_genotype(s)']) == 1:
+            row['predicted_genotype'] = genotype_results[sample_id]['predicted_genotype(s)'][0]
+            genotype = row['predicted_genotype']
+            if genotype in genotype_meta:
+                for field_id in genotype_meta[genotype]:
+                    row[field_id] = genotype_meta[genotype][field_id]
         else:
-            for i in range(0, num_genotype_fields):
-                row.append("")
+            row['qc_messages'] = "Ambiguous genotype assignement, possible genotypes: {}".format(";".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']]))
+
+
 
         fh.write("{}\n".format("\t".join(row)))
 

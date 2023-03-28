@@ -21,7 +21,7 @@ from cladeomatic.utils.vcfhelper import vcfReader
 from cladeomatic.utils.visualization import create_dist_histo
 from cladeomatic.version import __version__
 from cladeomatic.writers import write_snp_report, write_genotypes, write_node_report, print_params, write_scheme
-
+from cladeomatic.constants import MIN_FILE_SIZE
 
 def parse_args():
     class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
@@ -48,7 +48,7 @@ def parse_args():
                         help='Minimum number of unique snps for a clade to be valid',
                         default=1)
     parser.add_argument('--max_snp_count', type=int, required=False,
-                        help='Maximum number of snps to be selected for each genotype',
+                        help='Maximum number of SNPs to be selected for defining each genotype to prevent large numbers of redundant SNPs',
                         default=-1)
     parser.add_argument('--min_perc', type=float, required=False,
                         help='Minimum percentage of clade members to be positive for a kmer to be valid', default=0.1)
@@ -84,7 +84,7 @@ def validate_file(file):
     Returns
     -------
     '''
-    if os.path.isfile(file) and os.path.getsize(file) > 32:
+    if os.path.isfile(file) and os.path.getsize(file) > MIN_FILE_SIZE:
         return True
     else:
         return False
@@ -710,6 +710,7 @@ def run():
     force = cmd_args.force
     max_site_ambig = cmd_args.max_site_ambig
 
+    #initialize logging
     logging = init_console_logger(3)
 
     # Initialize Ray components
@@ -782,6 +783,7 @@ def run():
         handle.close()
     ref_seq_id = list(ref_seq.keys())[0]
     vcf_samples = set(vcfReader(variant_file).samples)
+    logging.info("Reading metadata file")
     metadata = parse_metadata(metadata_file)
 
     if mode == 'tree':
@@ -809,15 +811,13 @@ def run():
             if isint(sample_id):
                 logging.error("Error sample_ids cannot be integers offending sample '{}'".format(sample_id))
                 sys.exit()
-        group_samples = tree_samples
+
         sample_set = tree_samples | vcf_samples | set(metadata.keys())
-        num_samples = len(sample_set)
         missing_samples = sample_set - tree_samples
     else:
         group_data = parse_group_file(group_file, delim=delim)
         group_samples = set(group_data['sample_list'])
         sample_set = group_samples | vcf_samples | set(metadata.keys())
-        num_samples = len(sample_set)
         missing_samples = sample_set - group_samples
 
     # Validate Sample id's accross all inputs
@@ -849,13 +849,12 @@ def run():
                                                                                                   len(sample_set)))
         sys.exit()
 
+    #Parse all of the group information
     if mode == 'tree':
         group_data = parse_tree_groups(ete_tree_obj)
     else:
-        group_data = parse_group_file(group_file)
+        group_data = parse_group_file(group_file, delim=delim)
 
-    logging.info("Reading metadata file")
-    metadata = parse_metadata(metadata_file)
 
     logging.info("Recreating fasta sequences from vcf")
     pseudo_seq_file = os.path.join(outdir, "pseudo.seqs.fasta")
@@ -865,7 +864,7 @@ def run():
     logging.info("Calculating SNP distance matrix")
     distance_matrix_file = os.path.join(outdir,"{}-dist.mat.txt".format(prefix))
     (stdout,stderr) = run_snpdists(pseudo_seq_file, distance_matrix_file, num_threads)
-    if not os.path.isfile(distance_matrix_file) or os.path.getsize(distance_matrix_file) < 32:
+    if not os.path.isfile(distance_matrix_file) or os.path.getsize(distance_matrix_file) < MIN_FILE_SIZE:
         logging.error("snp-dists failed to produce a distance matrix, check the error message and try again:\n{}".format(stderr))
         sys.exit()
 

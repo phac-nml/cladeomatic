@@ -360,13 +360,14 @@ class kmer_worker:
                 for base in snp_rule:
                     if genotype in snp_rule[base]:
                         break
-                if len(self.kmer_scheme_data[pos][base]) == 1:
-                    genos_with_positive_kmer = genos_with_positive_kmer | genotype
-                    for kIndex in self.kmer_scheme_data[pos][base]:
-                        kmer_rules[kIndex]['positive_genotypes'].append(genotype)
-                else:
-                    for kIndex in self.kmer_scheme_data[pos][base]:
-                        kmer_rules[kIndex]['partial_genotypes'].append(genotype)
+                if base in self.kmer_scheme_data[pos]:
+                    if len(self.kmer_scheme_data[pos][base]) == 1:
+                        genos_with_positive_kmer = genos_with_positive_kmer | set(genotype)
+                        for kIndex in self.kmer_scheme_data[pos][base]:
+                            kmer_rules[kIndex]['positive_genotypes'].append(genotype)
+                    else:
+                        for kIndex in self.kmer_scheme_data[pos][base]:
+                            kmer_rules[kIndex]['partial_genotypes'].append(genotype)
 
 
             genotypes_to_check = target_genotypes - genos_with_positive_kmer

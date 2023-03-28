@@ -50,6 +50,29 @@ CLADE_DEFINING_SNPS_HEADER = [
 ]
 
 
+GENOTYPE_REPORT_HEADER = {
+    'sample_id',
+    'scheme',
+    'analysis_date',
+    'total_scheme_features',
+    'unique_scheme_positions',
+    'num_detected_features',
+    'num_detected_positions',
+    'predicted_genotype',
+    'mutations_supporting_prediction',
+    'confidence',
+    'qc_status',
+    'qc_messages',
+    'detected_alt_mutations'
+}
+
+
+CONFIDENCE = ['strong','moderate','weak']
+
+QC_STATUS = ['PASS','FAIL','WARN']
+
+MIN_FILE_SIZE = 32
+
 
 
 IUPAC_LOOK_UP = {
