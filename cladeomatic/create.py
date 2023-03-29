@@ -24,9 +24,25 @@ from cladeomatic.writers import write_snp_report, write_genotypes, write_node_re
 from cladeomatic.constants import MIN_FILE_SIZE
 
 def parse_args():
-    class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
-        pass
+    """
+    A function to parse the command line arguments passed at initialization,
+    format the arguments and return help prompts to the shell when
+    needed
+    :return: An ArgumentParser object with the arguments required, the usage
+    help prompts and the correct formatting for the incoming argument (str, int, etc.)
+    """
 
+    class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
+        """
+        Class to instantiate the formatter classes required for the argument parser.
+        Required for the correct formatting of the default parser values
+        :param ArgumentDefaultsHelpFormatter: ensures the default values for the ArgumentParser
+        show up for the command line arguments
+        :param RawDescriptionHelpFormatter: ensures the correct display of the default values
+        for the ArgumentParser
+        """
+        pass
+    #creation of the ArgumentParser object
     parser = ArgumentParser(
         description="Clade-O-Matic: Genotyping scheme development v. {}".format(__version__),
         formatter_class=CustomFormatter)
@@ -77,26 +93,24 @@ def parse_args():
     return parser.parse_args()
 
 def validate_file(file):
-    '''
-    Parameters file
-    ----------
-    file
-    Returns
-    -------
-    '''
-    if os.path.isfile(file) and os.path.getsize(file) > MIN_FILE_SIZE:
+    """
+    A function to parse the command line arguments passed at initialization,
+    format the arguments and return help prompts to the shell when
+    needed
+    :return: An ArgumentParser object with the arguments required, the usage
+    help prompts and the correct formatting for the incoming argument (str, int, etc.)
+    """
+    if os.path.isfile(file) and os.path.getsize(file) > 32:
         return True
     else:
         return False
 
 def isint(str):
-    '''
-    Parameters
-    ----------
-    str
-    Returns
-    -------
-    '''
+    """
+    A function to determine if a string can be cast to an integer
+    :param str: the string to be tested
+    :return: boolean True if the string can be cast to an integer
+    """
     try:
         int(str)
         return True
@@ -105,14 +119,15 @@ def isint(str):
 
 def get_tree_genotypes(tree):
     '''
-    Accepts a ETE3 tree object and returns the heirarchal node id's for every leaf
+    Accepts a ETE3 tree object and returns the heirarchal node ids for every leaf
     :param tree: ETE3 tree object
-    :return: dict of leaf names and list of node heirarchy
+    :return: dictionary of leaf names and list of node heirarchy
     '''
     samples = tree.get_leaf_names()
     geno = {}
     for sample_id in samples:
         geno[sample_id] = []
+    #Preorder traversal sequence is root, left, right - see more at ete3 documentation
     for node in tree.traverse("preorder"):
         node_id = node.name
         if node.is_leaf():
@@ -125,13 +140,16 @@ def get_tree_genotypes(tree):
 
 def parse_group_file(file, delim=None):
     '''
-
+    Method to read the grouping file passed and construct an ete3 object from it
     Parameters
     ----------
     file: TSV file which contains two columns [sample_id, genotype]
-    delim: character to split genotypes into levels
+    delim: character to split genotypes into levels, default is none
+    as it will be determined dynamically
 
-    Returns dict of all of the clade memberships in the file
+    Returns a dictionary of all of the clade memberships in the file:
+    the delimiter used, the sample map, the membership groups, the genotype list,
+    and valid tree nodes
     -------
 
     '''
@@ -168,7 +186,7 @@ def parse_group_file(file, delim=None):
             groups[g] = set()
 
     sample_map = {}
-    # Add sample to each genotype
+    # Add sample to each genotype determined
     for row in df.itertuples():
         sample_id = row.sample_id
         sample_map[row.index] = {'sample_id': sample_id, 'genotype': row.genotype}
@@ -182,13 +200,15 @@ def parse_group_file(file, delim=None):
 
 def parse_tree_groups(ete_tree_obj, delim='.'):
     '''
-
+    Method takes an ete3 tree object and constructs the group data and
+    returns it in the form of an ETE3 object
     Parameters
     ----------
     ete_tree_obj: ETE3 tree object
-    delim: character to split genotypes into levels
+    delim: character to split genotypes into levels, default is '.', note delimiter
+    is contained in the ete3 object
 
-    Returns dict of all of the clade memberships in the file
+    Returns a dictionary of all of the clade memberships in the file
     -------
 
     '''
@@ -199,11 +219,13 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
     groups = {}
     unique_genotypes = set()
     valid_nodes = set()
+    #parse out the genotype ids and sample ids from the tree
     for sample_id in genotypes:
         genotype = "{}".format(delim).join(genotypes[sample_id])
         unique_genotypes.add(genotype)
         sample_map[id] = {'sample_id': sample_id, 'genotype': genotype}
         genotype = genotype.split(delim)
+        #parse the tree to find the groups
         for node_id in [str(x) for x in genotype]:
             valid_nodes.add(node_id)
         for i in range(1, len(genotype) + 1):
@@ -211,7 +233,7 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
             groups[g] = set()
         id += 1
 
-    # Add sample to each genotype
+    # Add sample to each genotype node
     for id in sample_map:
         genotype = sample_map[id]['genotype'].split(delim)
         for i in range(1, len(genotype) + 1):
@@ -223,22 +245,26 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
 
 def find_overlaping_gene_feature(start, end, ref_info, ref_name):
     '''
-
+    Method to find the overlapping gene features in the reference
+    sequence dictionary passed
     Parameters
     ----------
-    start
-    end
-    ref_info
-    ref_name
+    start - the coding sequence start
+    end - the coding sequence end
+    ref_info - the reference sequence dictionary
+    ref_name - the reference sequence name
 
-    Returns
+    Returns a dictionary of the gene feature
     -------
 
     '''
     cds_start = start
     cds_end = end
+    #if the refrence sequence name is not in the sequence dictionary
+    #return None - invalid
     if not ref_name in ref_info:
         return None
+    #loop through the reference dictionary
     for feat in ref_info[ref_name]['features']['CDS']:
         positions = feat['positions']
         gene_start = -1
@@ -253,6 +279,16 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
     return None
 
 def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=11):
+    """
+    This method creates the kmer-based scheme.
+    :param header: the header row of the scheme - default is SCHEME_HEADER from constants
+    :param ref_features: the reference features/genes
+    :param kmer_worker: the kmer_worker object that contains the kmer set,
+    scheme
+    :param sample_genotypes: the temporary
+    :param trans_table:
+    :return: a list for the formatted scheme
+    """
     perf_annotation = True
     ref_id = list(ref_features.keys())[0]
     ref_seq = ''
@@ -641,6 +677,13 @@ def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
     return scheme
 
 def format_biohansel_scheme(biohansel_kmers,clade_obj):
+    """
+    A method to format the passed kmers and clade object to create a BioHansel
+    compatible scheme
+    :param biohansel_kmers: the pre-formatted kmers list
+    :param clade_obj: the cladeworker object
+    :return: a dictionary of the scheme in BioHansel format
+    """
     valid_nodes = clade_obj.get_valid_nodes()
     node_heirarchy = {}
     delim = clade_obj.delim
@@ -671,12 +714,24 @@ def format_biohansel_scheme(biohansel_kmers,clade_obj):
     return scheme
 
 def write_biohansel_scheme(scheme,fasta_file):
+    """
+    A method to format the passed scheme for BioHansel processsing
+    :param scheme: the scheme file
+    :param fasta_file: the file to which this method writes the scheme in
+    BioHansel format
+    """
     fh = open(fasta_file,'w')
     for id in scheme:
         fh.write(">{}\n{}\n".format(id,scheme[id]))
     fh.close()
 
 def write_biohansel_meta(scheme,out_file):
+    """
+    Method to write the BioHansel metadata table that includes the split
+    k-mers and the actual SNPs interrogated
+    :param scheme: the scheme file for the data
+    :param out_file: the path to the biohandel metadata file
+    """
     fh = open(out_file,'w')
     fh.write("kmername\ttarget_pos\ttarget_base\n")
     for id in scheme:
@@ -702,6 +757,16 @@ def create_alt_psedo_sequence(ref_seq,positions,outfile):
 
 
 def run():
+    """
+    The main method to read the command line arguments and create the various output
+    files as described in the readme.  Reads the tree or group file, reference file
+    vcf file and metadata file.  Both the tree and group mode will validate the input
+    files, label the nodes, create the distance matrix for the identified SNPs, filter
+    for the relevant SNPs in the VCF, find the relevant k-mers within the sequences
+    submitted, determine the SNP scheme with and without k-mers, and finally output
+    all the files as per the documentation (please refer to the readme for details on
+    output files).
+    """
     cmd_args = parse_args()
     tree_file = cmd_args.in_nwk
     group_file = cmd_args.in_groups
@@ -739,7 +804,7 @@ def run():
     if not ray.is_initialized():
         ray.init(num_cpus=num_threads)
 
-    # Initialize directory
+    # Initialize output directory
     if not os.path.isdir(outdir):
         logging.info("Creating analysis directory {}".format(outdir))
         os.mkdir(outdir, 0o755)
@@ -747,8 +812,10 @@ def run():
         logging.info("Error directory {} already exists, if you want to overwrite existing results then specify --force".format(outdir))
         sys.exit()
 
+    #create the parameter log file of command line argument input for troubleshooting
     print_params(cmd_args, os.path.join(outdir,"{}-params.log".format(prefix)))
 
+    #create the temporary processing directory
     analysis_dir = os.path.join(outdir, "_tmp")
     if not os.path.isdir(analysis_dir):
         logging.info("Creating temporary analysis directory {}".format(analysis_dir))
@@ -771,7 +838,7 @@ def run():
         logging.error("You must specify either a tree file or group file")
         sys.exit()
 
-    # Validate input file presence
+    # Validate input files for processing
     files = [variant_file, metadata_file, reference_file]
     for file in files:
         status = validate_file(file)
@@ -787,6 +854,7 @@ def run():
 
     ref_seq = {}
     ref_features = {}
+    #parse the genbank or fasta reference sequences
     if seq_file_type == 'genbank':
         ref_features = parse_reference_gbk(reference_file)
         for chrom in ref_features:
@@ -799,15 +867,19 @@ def run():
                 ref_seq[id] = seq
         handle.close()
     ref_seq_id = list(ref_seq.keys())[0]
+    #parse the VCF file
     vcf_samples = set(vcfReader(variant_file).samples)
     logging.info("Reading metadata file")
+    #parse the metadata file
     metadata = parse_metadata(metadata_file)
-
+    #if the file is a tree file, validate and create a programmatic
+    #ete3 tree file as per the rooting method passed - default is outgroup
     if mode == 'tree':
         if root_method is None and root_name is not None:
             root_method = 'outgroup'
 
-        # validate samples present in all files match
+        # validate samples present in all input files
+        #construct the tree using the midpoint rooting method
         ete_tree_obj = parse_tree(tree_file, logging, ete_format=1, set_root=True, resolve_polytomy=True,
                                   ladderize=True,
                                   method='midpoint')
@@ -832,12 +904,13 @@ def run():
         sample_set = tree_samples | vcf_samples | set(metadata.keys())
         missing_samples = sample_set - tree_samples
     else:
+        #parse the group file
         group_data = parse_group_file(group_file, delim=delim)
         group_samples = set(group_data['sample_list'])
         sample_set = group_samples | vcf_samples | set(metadata.keys())
         missing_samples = sample_set - group_samples
 
-    # Validate Sample id's accross all inputs
+    # Validate Sample ids across all inputs
     if len(missing_samples) > 0:
         logging.error(
             "Error {} samples are not present in tree or genotype file: {}".format(len(missing_samples),
@@ -862,7 +935,7 @@ def run():
         sys.exit()
 
     if min_member_count > len(sample_set):
-        logging.error("Error specified minimum memers to {} but there are only {} samples".format(min_member_count,
+        logging.error("Error specified minimum members to {} but there are only {} samples".format(min_member_count,
                                                                                                   len(sample_set)))
         sys.exit()
 
@@ -912,9 +985,7 @@ def run():
     write_genotypes(cw.raw_genotypes, os.path.join(outdir, "{}-genotypes.raw.txt".format(prefix)))
     write_genotypes(cw.supported_genotypes, os.path.join(outdir, "{}-genotypes.supported.txt".format(prefix)))
 
-
     create_dist_histo(cw.distance_histo,os.path.join(outdir, "{}-sample.distances.html".format(prefix)))
-
 
     #perform kmer selection
     genotype_map = cw.selected_genotypes
@@ -925,6 +996,7 @@ def run():
                  target_positions=target_positions, num_threads=num_threads)
 
     kmers = kw.extracted_kmers
+    #write the extracted kmer file with kmers determined above
     fh = open(os.path.join(outdir,"{}-extracted.kmers.txt".format(prefix)),'w')
     fh.write("kseq\taln_start\taln_end\tis_valid\ttarget_positions\tgenotype\tgenotype_count\n")
     for kseq in kmers:
@@ -952,7 +1024,7 @@ def run():
     logging.info("Final set of {} genotyping positions selected".format(len(cw.selected_positions)))
     write_genotypes(cw.selected_genotypes, os.path.join(outdir, "{}-genotypes.selected.txt".format(prefix)))
 
-    logging.info("Writting distance based clustering")
+    logging.info("Writing distance based clustering")
 
     dist_header = "{}\n".format("\t".join(["sample_id"] + ["thresh-{}".format(";".join([str(x) for x in cw.dist_thresholds]))]))
     dist_nomenclature = {}
@@ -960,15 +1032,14 @@ def run():
         genotype = cw.delim.join([str(x) for x in cw.sample_linkage_clusters[sample_id]])
         dist_nomenclature[sample_id] = genotype
     write_genotypes(dist_nomenclature, os.path.join(outdir, "{}-genotypes.distance.txt".format(prefix)),header=dist_header)
-
-
+    #if sepcified, prune the scheme for the maximum number of snps per node
     if max_snp_count > 1:
         cw.prune_snps()
         variant_pos = set(cw.variant_positions)
         selected_positions = set(cw.get_selected_positions())
         kw.remove_scheme_pos(variant_pos - selected_positions)
 
-    logging.info("Creating scheme")
+    logging.info("Creating schemes")
     if len(ref_features) > 0:
         scheme = create_scheme(SCHEME_HEADER,ref_features,kw,cw.selected_genotypes,trans_table=11)
         snp_scheme = create_snp_scheme(SCHEME_HEADER,ref_features,cw,trans_table=11)
@@ -979,6 +1050,7 @@ def run():
     write_scheme(SCHEME_HEADER, scheme, os.path.join(outdir, "{}-kmer.scheme.txt".format(prefix)))
     write_scheme(SCHEME_HEADER, snp_scheme, os.path.join(outdir, "{}-snp.scheme.txt".format(prefix)))
 
+    #creating the BioHansel files
     bh_data = format_biohansel_scheme(kw.biohansel_kmers, cw)
     write_biohansel_scheme(bh_data['fasta'], os.path.join(outdir, "{}-biohansel.fasta".format(prefix)))
     write_biohansel_meta(bh_data['meta'], os.path.join(outdir, "{}-biohansel.meta.txt".format(prefix)))
