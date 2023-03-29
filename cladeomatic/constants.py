@@ -95,7 +95,6 @@ NODE_INFO_HEADER = [
 ]
 
 
-
 CONFIDENCE = ['strong','moderate','weak']
 
 QC_STATUS = ['PASS','FAIL','WARN']
