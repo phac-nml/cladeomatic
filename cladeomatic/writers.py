@@ -1,5 +1,5 @@
 from cladeomatic.version import __version__
-
+from cladeomatic.constants import NODE_INFO_HEADER
 
 def write_clade_snp_report(clade_data, out_file):
     #TO DO Write report
@@ -51,36 +51,39 @@ def write_node_report(clade_data, outfile):
     '''
     fh = open(outfile, 'w')
 
-    header = ['clade_id', 'num_members','pos', 'base', 'ave_dist', 'is_valid','is_selected', 'closest_clade_id', 'closest_sample_id',
-              'closest_sample_dist', 'field_name', 'fisher_oddsr', 'fisher_p']
+    header = NODE_INFO_HEADER
     fh.write("{}\n".format("\t".join([str(x) for x in header])))
+
 
     for clade_id in clade_data:
         num_bases = len(clade_data[clade_id]['bases'])
         for i in range(0, num_bases):
-            row = [
-                clade_id,
-                clade_data[clade_id]['num_members'],
-                clade_data[clade_id]['pos'][i]+1,
-                clade_data[clade_id]['bases'][i],
-                clade_data[clade_id]['ave_within_clade_dist'],
-                clade_data[clade_id]['is_valid'],
-                clade_data[clade_id]['is_selected'],
-                clade_data[clade_id]['closest_clade_id'],
-                clade_data[clade_id]['closest_sample_id'],
-                clade_data[clade_id]['closest_sample_dist'],
-                '',
-                '',
-                '',
-            ]
-            if len(clade_data[clade_id]['fisher']) == 0:
-                fh.write("{}\n".format("\t".join([str(x) for x in row])))
-            else:
+            row = {}
+            for field_name in header:
+                row[field_name] = ''
+                if field_name in clade_data[clade_id]:
+                    row[field_name] = clade_data[clade_id][field_name]
+            row['clade_id'] = clade_id
+            row['pos'] = clade_data[clade_id]['pos'][i]+1
+            row['base'] = clade_data[clade_id]['bases'][i]
+
+            if len(clade_data[clade_id]['fisher']) > 0:
                 for field_name in clade_data[clade_id]['fisher']:
-                    row[10] = field_name
-                    row[11] = clade_data[clade_id]['fisher'][field_name]['oddsr']
-                    row[12] = clade_data[clade_id]['fisher'][field_name]['p']
-                    fh.write("{}\n".format("\t".join([str(x) for x in row])))
+                    row['field_name'] = field_name
+                    row['fisher_oddsr'] = clade_data[clade_id]['fisher'][field_name]['oddsr']
+                    row['fisher_p'] = clade_data[clade_id]['fisher'][field_name]['p']
+
+            for field_name in row:
+                value = row[field_name]
+                if isinstance(value,list):
+                    value = ";".join([str(x) for x in value])
+                elif isinstance(value,dict):
+                    value = ";".join([str(x) for x in value.values()])
+                if value == ';':
+                    value == ''
+
+
+            fh.write("{}\n".format("\t".join([str(x) for x in row.values()])))
 
     fh.close()
 

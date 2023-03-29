@@ -880,7 +880,9 @@ class clade_worker:
             P = 1
             Rpear = 0
             Ppear = 1
-            if len(temporal_data[node_id]['dist']) >= 3:
+            num_distinct_dist = len(set(temporal_data[node_id]['dist']))
+            num_distinct_year = len(set(temporal_data[node_id]['year']))
+            if num_distinct_dist >= 3 and num_distinct_year >= 3:
                 R, P = spearmanr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
                 Rpear, Ppear = pearsonr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
 

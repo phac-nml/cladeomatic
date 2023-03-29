@@ -203,6 +203,7 @@ def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
             for pos in sample_variants[sample_id][chrom]:
                 if pos >= ref_len:
                     print("Error variant position is outside sequence, check sequence for insertions which are not supported: {} seqlen {} pos".format(ref_len,pos))
+                    sys.exit()
                 base = sample_variants[sample_id][chrom][pos]
                 seq[pos] = base
             seq = ''.join(seq)

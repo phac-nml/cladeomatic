@@ -50,7 +50,7 @@ CLADE_DEFINING_SNPS_HEADER = [
 ]
 
 
-GENOTYPE_REPORT_HEADER = {
+GENOTYPE_REPORT_HEADER = [
     'sample_id',
     'scheme',
     'analysis_date',
@@ -64,7 +64,36 @@ GENOTYPE_REPORT_HEADER = {
     'qc_status',
     'qc_messages',
     'detected_alt_mutations'
-}
+]
+
+NODE_INFO_HEADER = [
+        'clade_id',
+        'pos',
+        'base',
+        'min_dist',
+        'max_dist',
+        'ave_dist',
+        'num_members',
+        'is_valid',
+        'is_selected',
+        'total_within_clade_dist',
+        'num_comparisons_within_clade_dist',
+        'ave_within_clade_dist',
+        'closest_clade_id',
+        'closest_clade_dist',
+        'closest_sample_id',
+        'closest_sample_dist',
+        'clade_sample_id',
+        'spearmanr',
+        'spearmanr_pvalue',
+        'pearsonr',
+        'pearsonr_pvalue',
+        'is_temporal_signal_present',
+        'field_name',
+        'fisher_oddsr',
+        'fisher_p'
+]
+
 
 
 CONFIDENCE = ['strong','moderate','weak']
