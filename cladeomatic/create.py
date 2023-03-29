@@ -1032,6 +1032,7 @@ def run():
         genotype = cw.delim.join([str(x) for x in cw.sample_linkage_clusters[sample_id]])
         dist_nomenclature[sample_id] = genotype
     write_genotypes(dist_nomenclature, os.path.join(outdir, "{}-genotypes.distance.txt".format(prefix)),header=dist_header)
+
     #if sepcified, prune the scheme for the maximum number of snps per node
     if max_snp_count > 1:
         cw.prune_snps()
