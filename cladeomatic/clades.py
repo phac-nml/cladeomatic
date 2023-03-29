@@ -854,6 +854,7 @@ class clade_worker:
             y1 = self.metadata_dict[sample_id_1]['year']
             if y1 == 'nan' or len(y1) == 0 or y1 is None:
                 continue
+            y1 = float(y1)
             for i in range(index, num_columns):
                 sample_id_2 = header[i]
                 if sample_id_1 == sample_id_2:
@@ -861,6 +862,7 @@ class clade_worker:
                 y2 = self.metadata_dict[sample_id_2]['year']
                 if y2 == 'nan' or len(y2) == 0 or y2 is None:
                     continue
+                y2 = float(y2)
                 nodes_2 = set(sample_lookup[sample_id_2])
                 value = int(line[i])
                 ovl = nodes_1 & nodes_2
@@ -872,14 +874,16 @@ class clade_worker:
                 temporal_data[node_id]['year'].append(y1)
         fh.close()
 
+
         for node_id in temporal_data:
             R = 0
             P = 1
             Rpear = 0
             Ppear = 1
-            if len(temporal_data[node_id]) >= 3:
+            if len(temporal_data[node_id]['dist']) >= 3:
                 R, P = spearmanr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
                 Rpear, Ppear = pearsonr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
+
 
             self.clade_data[node_id]['spearmanr'] = R
             self.clade_data[node_id]['spearmanr_pvalue'] = P
