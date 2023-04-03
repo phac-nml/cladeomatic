@@ -9,7 +9,8 @@ NT_SUB = str.maketrans('acgtrymkswhbvdnxACGTRYMKSWHBVDNX',
                        'tgcayrkmswdvbhnxTGCAYRKMSWDVBHNX')
 
 def revcomp(s):
-    """Reverse complement nucleotide sequence
+    """
+    Reverse complement nucleotide sequence
 
     Args:
         s (str): nucleotide sequence
@@ -21,7 +22,8 @@ def revcomp(s):
 
 def read_fasta_dict(fasta_file):
     """
-
+    Reads the fasta file from the passed file path and formats
+    the input to a dictionary of sequences
     :param fasta_file: [str] Path to fasta file to read
     :return: [dict] of sequences indexed by sequence id
     """
@@ -33,11 +35,13 @@ def read_fasta_dict(fasta_file):
     return seqs
 
 def gb_to_fasta_dict(gbk_file):
-    '''
-
-    :param gbk_file: GenBank formatted sequence file
-    :return: [dict] of sequences indexed by sequence id
-    '''
+    """
+    Reads a GenBank formatted sequnce file and creates a
+    dictionary of sequences with the sequence id as keys
+    :param gbk_file: String - the string path to a GenBank formatted
+    sequence file
+    :return: dictionary - a dictionary of sequences indexed by sequence id
+    """
     seqs = dict()
     with open(gbk_file, "r") as handle:
         for record in SeqIO.parse(handle, "genbank"):
@@ -47,8 +51,11 @@ def gb_to_fasta_dict(gbk_file):
 
 def parse_reference_gbk(gbk_file):
     """
-    :param gbk_file: Reference genbank format file with sequence annotations
-    :return: dict of all of the reference features
+    Method to parse the GenBank reference file, clean the strings, and
+    return the reference features of interest.
+    :param gbk_file: String - path to the reference genbank
+    format file with sequence annotations
+    :return: dictionary - a dictionary of all of the reference features
     """
     sequences = {}
     with open(gbk_file) as handle:
@@ -58,7 +65,7 @@ def parse_reference_gbk(gbk_file):
             if len(record.accession) == 2:
                 gb_accession = record.accession[0]
                 gb_accession_version = gb_accession[1]
-
+            #clean the sequence
             genome_seq = repr(record.sequence).replace("\'",'')
             sequences[gb_accession] = {
                 'accession':gb_accession,
@@ -66,6 +73,7 @@ def parse_reference_gbk(gbk_file):
                 'features': {'source': genome_seq}
             }
             features = record.features
+            #retrieve the features if present
             for feat in features:
                 if feat.key == 'CDS' or feat.key == '5\'UTR' or feat.key == '3\'UTR':
                     if not feat.key in sequences[gb_accession]['features']:
@@ -75,6 +83,7 @@ def parse_reference_gbk(gbk_file):
                     gene_name = ''
                     locus_tag = ''
                     aa = ''
+                    #more string cleaning
                     for name in qualifier:
                         if name.key == '/gene=':
                             gene_name = name.value.replace("\"", '').strip()
@@ -87,8 +96,9 @@ def parse_reference_gbk(gbk_file):
                         gene_name = locus_tag
                     locations = feat.location.strip().replace("join(", '').replace(')', '').split(',')
                     seq = []
-
+                    #retreive the locations of the features
                     for location in locations:
+                        #more string cleaning
                         location = location.replace('<','').replace('>','')
                         if not 'complement' in location:
                             location = location.split('.')
@@ -110,10 +120,11 @@ def parse_reference_gbk(gbk_file):
     return sequences
 
 def calc_md5(string):
-    '''
-    :param string: string to comput MD5
-    :return: md5 hash
-    '''
+    """
+    Method to encode the MD5 hash for the input string
+    :param string: String to compute MD5
+    :return: hash - the md5 hash
+    """
     seq = str(string).encode()
     md5 = hashlib.md5()
     md5.update(seq)
@@ -121,9 +132,10 @@ def calc_md5(string):
 
 def generate_non_gap_position_lookup(seq):
     """
-    Creates a list of positions which correspond to the position of that base in a gapless sequence
-    :param seq: string
-    :return: list
+    Creates a list of positions which correspond to the position
+    of that base in a gapless sequence
+    :param seq: string - the sequence to process
+    :return: list - an int list of the positions  of the gaps
     """
     length = len(seq)
     num_gaps = 0
@@ -138,6 +150,13 @@ def generate_non_gap_position_lookup(seq):
     return lookup
 
 def create_aln_pos_from_unalign_pos_lookup(aln_seq):
+    """
+    This method creates a list of integers for the positions
+    of the bases in the unaligned sequence derived from the
+    aligned sequence passed to the method
+    :param aln_seq: String - the alignment sequence
+    :return: list - a list of integers for the positions found
+    """
     unalign_seq = aln_seq.replace('-', '')
     aln_len = len(aln_seq)
     unaln_len = len(unalign_seq)
@@ -152,9 +171,19 @@ def create_aln_pos_from_unalign_pos_lookup(aln_seq):
     return lookup
 
 def get_variants(vcf_file):
+    """
+    This method reads the incoming VCF file and returns
+    a dictionary of the sample variant bases and their locations
+    both in the genome and the tree
+    :param vcf_file: String - path to the VCF file
+    :return: dictionary - a dictionary of the sample variants with the
+    node id as key
+    """
+    #read the file
     vcf = vcfReader(vcf_file)
     data = vcf.process_row()
     samples = vcf.samples
+    #valid bases include missing data - still valid for our purposes
     valid_bases = ['A', 'T', 'C', 'G', '-', 'N']
 
     sample_variants = {}
@@ -163,12 +192,12 @@ def get_variants(vcf_file):
 
     if data is None:
         return {}
-
+    #process the VCF data
     while data is not None:
         chrom = data['#CHROM']
         pos = int(data['POS']) -1
         ref = data['REF']
-
+        #link the samples id and the chromosomal location to their variant base
         for sample_id in samples:
             base = data[sample_id]
 
@@ -177,6 +206,7 @@ def get_variants(vcf_file):
             if base not in valid_bases:
                 base = 'N'
             is_ref = base == ref
+            #if the base is the same as the reference base, skip
             if is_ref:
                 continue
             if not chrom in sample_variants[sample_id]:
@@ -186,19 +216,31 @@ def get_variants(vcf_file):
         data = vcf.process_row()
     return sample_variants
 
-
-
 def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
+    """
+    This method creates the pseudo full sequences of the variants found
+    in the VCF file.
+    :param ref_id: String - the reference sequence identifier
+    :param ref_seq: String - the reference sequence to alter
+    :param vcf_file: String - the path to the VCF file
+    :param outfile: String - the path to the pseudo variant outfile
+    """
+    #retrieve the variant bases, genome and tree locations
     sample_variants = get_variants(vcf_file)
     fh = open(outfile,'w')
     fh.write(">{}\n{}\n".format(ref_id, ref_seq))
     ref_len = len(ref_seq)
+    #loop through the sample variants to replace the reference base
+    #with the variant base at the variant base position
+    #to create the pseudo sequence
     for sample_id in sample_variants:
         if sample_id == ref_id:
             continue
         if len(sample_variants[sample_id]) ==0:
             sample_variants[sample_id] = {}
+        #deep copy the reference sequence
         seq = list(copy.deepcopy(ref_seq))
+        #perform the replacement for the variant
         for chrom in sample_variants[sample_id]:
             for pos in sample_variants[sample_id][chrom]:
                 if pos >= ref_len:
@@ -208,10 +250,17 @@ def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
                 seq[pos] = base
             seq = ''.join(seq)
             fh.write(">{}\n{}\n".format(sample_id,seq))
-
     fh.close()
 
 def calc_homopolymers(seq):
+    """
+    The method calculates the longest homopolymer (the sequence
+    of consecutive identical bases) in the sequence or sequence
+    fragment passed
+    :param seq: String - the sequences or sequence fragment to find the
+    longest homopolymer
+    :return: int - the longest homopolymer length
+    """
     longest = 0
     for b in ['A', 'T', 'C', 'C']:
         matches = re.findall("{}+".format(b), seq)
