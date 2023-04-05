@@ -36,7 +36,7 @@ def read_fasta_dict(fasta_file):
 
 def gb_to_fasta_dict(gbk_file):
     """
-    Reads a GenBank formatted sequnce file and creates a
+    Reads a GenBank formatted sequence file and creates a
     dictionary of sequences with the sequence id as keys
     :param gbk_file: String - the string path to a GenBank formatted
     sequence file

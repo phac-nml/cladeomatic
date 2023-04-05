@@ -76,11 +76,9 @@ def init_automaton_dict(seqs):
 def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
     """
     This method processes determines the start and end indexes of the
-    kmers for the sequence identifiers passed.
-    :param fasta_file: String - the file path to the pseudo fasta file
-    which contains the reference sequence with the variants subbed in.
-    Note this method is added to the Ray instance for distributed computational
-    power.
+    kmers for the sequence identifiers passed.  Note this method is
+    added to the Ray instance for distributed computational power.
+    :param fasta_file: String - the file path to the fasta formatted file.
     :param out_file: String - the path to the output kmer file - temporary processing file
     :param seqids: dictionary - the sequence ids as keys
     :param num_kmers: int - number of kmers to process
@@ -93,7 +91,7 @@ def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
     kmer_align_end = [-1] * num_kmers
     seqs_present = {}
     fh = open(out_file,'w')
-    #read and process the pseudo sequences
+    #read and process the fasta sequences
     with open(fasta_file, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             id = str(record.id)
@@ -135,7 +133,7 @@ def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
     """
     This method retrieves
     :param seqKmers: dictionary - the index as keys and seqeunce of the kmer
-    :param fasta_file: String - the file path to the pseudo fasta sequence file
+    :param fasta_file: String - the file path to the fasta sequence file
     :param out_dir: String - the file path to the output file
     :param prefix: String - the prefix for the output files
     :param n_threads: int - number of threads to be used in this process, default is 1
@@ -147,7 +145,7 @@ def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
     klen = len(seqKmers[0])
     count_seqs = 0
     seq_ids = []
-    #retrieve the sequence ids from the pseudo fasta
+    #retrieve the sequence ids from the fasta file
     with open(fasta_file, "r") as handle:
         for record in SeqIO.parse(handle, "fasta"):
             seq_ids.append(str(record.id))

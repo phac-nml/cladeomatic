@@ -6,6 +6,13 @@ def write_clade_snp_report(clade_data, out_file):
     return
 
 def print_params(params,outfile):
+    """
+    A method to create the parameter file (list of all the command line
+    parameters and their user input values if supplied)
+    :param params: params - the parameter object
+    :param outfile: String - the output file path
+    :return:
+    """
     fh = open(outfile,'w')
     p = vars(params)
     fh.write("version\t{}\n".format(__version__))
@@ -16,17 +23,13 @@ def print_params(params,outfile):
     return
 
 def write_kmers(kmers, out_file):
-    '''
-
-    Parameters
-    ----------
-    kmers
-    out_file
-
-    Returns
-    -------
-
-    '''
+    """
+    A method to create and write a kmer file indicating the
+    index of the kmer, the kmer sequence, the snp position and base value,
+    and the alignment start and end
+    :param kmers: dictionary - a dictionary of kmers
+    :param out_file: String - the output file path
+    """
     header = "index\tkseq\ttarget_pos\ttarget_base\taln_start\taln_end\n"
     fh = open(out_file, 'w')
     fh.write(header)
@@ -43,12 +46,12 @@ def write_kmers(kmers, out_file):
     fh.close()
 
 def write_node_report(clade_data, outfile):
-    '''
+    """
     Writes the Node information data to a tsv file
     :param clade_data: dict Node information structure
-    :param outfile: str
+    :param outfile: string - the output file path
     :return:
-    '''
+    """
     fh = open(outfile, 'w')
 
     header = NODE_INFO_HEADER
@@ -89,13 +92,11 @@ def write_node_report(clade_data, outfile):
 
     return
 
-
-
 def write_snp_report(snp_data, outfile):
     '''
     Accepts snp_data dict data structure and writes snp details
     :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
-    :param outfile: str
+    :param outfile: string - the output file path
     :return:
     '''
     fh = open(outfile, 'w')
@@ -120,7 +121,7 @@ def write_genotypes(genotypes, outfile,header="sample_id\tgenotype\n"):
     '''
     Accepts a list of sample genotype heirarchies and writes them to a file
     :param genotypes: dict of leaf names with heirarchal list of node id's to represent tree structure
-    :param outfile: str
+    :param outfile: string - the output file path
     :return:
     '''
     fh = open(outfile, 'w')
@@ -132,6 +133,12 @@ def write_genotypes(genotypes, outfile,header="sample_id\tgenotype\n"):
     return
 
 def write_scheme(header,scheme,outfile):
+    """
+    A method to write the scheme to a file
+    :param header: String - the header string
+    :param scheme: dictionary - a dictionary of the scheme data
+    :param outfile: String the output file path
+    """
     fh = open(outfile, 'w')
     fh.write("{}\n".format("\t".join(header)))
     for i in range(0, len(scheme)):

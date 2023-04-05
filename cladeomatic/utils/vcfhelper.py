@@ -1,6 +1,12 @@
 import os,copy
+import cladeomatic.constants as CONSTANT
 
 class vcfReader:
+    """
+    The vcfReader class is meant to be a helper class to read and
+    process VCF files
+    """
+    #the list of required headers for a VCF file
     required_fields = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']
     row_num = 0
     row = None
@@ -9,25 +15,40 @@ class vcfReader:
     samples = []
 
     def next_row(self):
+        """
+        A method to return the next row of the VCF file
+        :return: the file reader object - the next row of the file
+        """
         try:
             return next(self.reader)
         except:
             return None
 
     def check_file(self, file):
+        """
+        A method to verify that a file exists and is not empty
+        :param file: String - the file path
+        :return: Boolean - True if the file exists and is not empty
+        """
         if not os.path.isfile(file):
             return False
-        if os.path.getsize(file) == 0:
+        if os.path.getsize(file) == CONSTANT.MIN_FILE_SIZE:
             return False
         return True
 
     def __init__(self,file):
-
+        """
+        The vcfReader class instantiator.  Also used to run the
+        processing methods like file validation, reading the file,
+        cleaning the file Strings, and creating the header and sample lists
+        :param file: String - the file path
+        """
+        #return None if the file validation fails
         if not self.check_file(file):
             return None
 
         self.reader = open(file,'r')
-
+        #create the header list
         while len(self.header) == 0:
             self.row = self.next_row()
             if self.row == None:
@@ -35,13 +56,19 @@ class vcfReader:
             self.row.rstrip()
             if self.row[0:6] == '#CHROM':
                 self.header = self.row.rstrip().split("\t")
-
+        #create the sample list
         for idx,value in enumerate(self.header):
             if value in self.required_fields:
                 continue
             self.samples.append(str(value))
 
     def process_row(self):
+        """
+        A method to process the output of a row of the VCF file
+        :return: dictionary - a dictionary of the VCF file data with
+        the headers as keys for the sample data.  Return None if there
+        is no next row.
+        """
         self.row = self.next_row()
         if self.row is None:
             return None
