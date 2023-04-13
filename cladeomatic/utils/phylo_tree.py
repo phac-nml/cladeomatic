@@ -2,11 +2,13 @@ import os
 
 import dendropy
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, RectFace
+from deprecated import deprecated
 
 
 if not 'DISPLAY' in os.environ:
     os.environ['QT_QPA_PLATFORM']='offscreen'
 
+@deprecated()
 def tree_to_distance_matrix(tree_file,out_file):
     """
     This method converts a dendropy tree object to a distance
@@ -19,6 +21,7 @@ def tree_to_distance_matrix(tree_file,out_file):
     pdm = tree.phylogenetic_distance_matrix()
     pdm.write_csv(out_file)
 
+@deprecated()
 def get_pairwise_distances_from_matrix(matrix_file):
     """
     This method gets the pairwise distances from the passed matrix file
@@ -56,6 +59,7 @@ def remove_unsupported_clades(ete_tree_obj, valid_clades):
             node.delete()
     return tree
 
+@deprecated()
 def prune_tree(ete_tree_obj,valid_nodes):
     """
     This method removes nodes from the ETE3 tree object
@@ -213,6 +217,7 @@ def get_internal_clades(ete_tree_obj):
         clade_dict[clade_id] = children
     return clade_dict
 
+@deprecated()
 def init_clade_info(ete_tree_obj):
     """
     This method initializes the clade dictionary for the tree passed.
@@ -231,6 +236,7 @@ def init_clade_info(ete_tree_obj):
     return clade_info
 
 
+@deprecated()
 def get_tree_node_distances(ete_tree_obj):
     """
     This method creates a dictionary of tree distances for the
@@ -243,6 +249,7 @@ def get_tree_node_distances(ete_tree_obj):
         distances[node.name] = node.dist
     return distances
 
+@deprecated()
 def get_tree_node_bootstrap(ete_tree_obj):
     """
     A method to determine the branch support for the branches in the

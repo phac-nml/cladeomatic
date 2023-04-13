@@ -3,6 +3,7 @@ import sys
 from Bio import SeqIO, GenBank
 import random, hashlib, copy, re
 from cladeomatic.utils.vcfhelper import vcfReader
+from deprecated import deprecated
 
 
 NT_SUB = str.maketrans('acgtrymkswhbvdnxACGTRYMKSWHBVDNX',
@@ -20,6 +21,7 @@ def revcomp(s):
     """
     return s.translate(NT_SUB)[::-1]
 
+@deprecated()
 def read_fasta_dict(fasta_file):
     """
     Reads the fasta file from the passed file path and formats
@@ -34,6 +36,7 @@ def read_fasta_dict(fasta_file):
     handle.close()
     return seqs
 
+@deprecated()
 def gb_to_fasta_dict(gbk_file):
     """
     Reads a GenBank formatted sequence file and creates a
@@ -119,6 +122,7 @@ def parse_reference_gbk(gbk_file):
 
     return sequences
 
+@deprecated()
 def calc_md5(string):
     """
     Method to encode the MD5 hash for the input string
@@ -130,6 +134,7 @@ def calc_md5(string):
     md5.update(seq)
     return md5.hexdigest()
 
+@deprecated()
 def generate_non_gap_position_lookup(seq):
     """
     Creates a list of positions which correspond to the position

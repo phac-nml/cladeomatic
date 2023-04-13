@@ -1,6 +1,8 @@
 from cladeomatic.version import __version__
 from cladeomatic.constants import NODE_INFO_HEADER
+from deprecated import deprecated
 
+@deprecated()
 def write_clade_snp_report(clade_data, out_file):
     #TO DO Write report
     return
@@ -22,6 +24,7 @@ def print_params(params,outfile):
     fh.close()
     return
 
+@deprecated()
 def write_kmers(kmers, out_file):
     """
     A method to create and write a kmer file indicating the

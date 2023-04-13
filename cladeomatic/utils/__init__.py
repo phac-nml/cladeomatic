@@ -4,6 +4,7 @@ from scipy.stats import entropy, fisher_exact
 from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score
 from subprocess import Popen, PIPE
 import pandas as pd
+from deprecated import deprecated
 
 def init_console_logger(lvl):
     """
@@ -46,7 +47,7 @@ def calc_shanon_entropy(value_list):
     for v in value_list:
         values.append(v / total)
     return entropy(values)
-
+@deprecated()
 def calc_AMI(category_1, category_2):
     """
     Calculates the adjusted mutual info score between two clusterings
@@ -55,7 +56,7 @@ def calc_AMI(category_1, category_2):
     :return: float - the value of the AMI score for the two clusters
     """
     return adjusted_mutual_info_score(category_1, category_2, average_method='arithmetic')
-
+@deprecated
 def calc_ARI(category_1, category_2):
     """
     Calculates the adjusted rand score between two clusterings

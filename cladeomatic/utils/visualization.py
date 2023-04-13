@@ -2,8 +2,10 @@ import sys
 
 import plotly.express as px
 import pandas as pd
+from deprecated import deprecated
 
 
+@deprecated()
 def plot_bar(x,y):
     """
     A method to plot a bar chart with the x and y objects passed
