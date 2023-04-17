@@ -75,9 +75,10 @@ def init_automaton_dict(seqs):
 @ray.remote
 def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
     """
-    This method processes determines the start and end indexes of the
-    kmers for the sequence identifiers passed.  Note this method is
-    added to the Ray instance for distributed computational power.
+    This method processes the input list of all possible kmers for a temporary
+    output file for further processing.  This file contains the sequence id, kmer
+    index, kmer start and end indexes, and if the kmer is a reverse compliment.
+    Note this method is added to the Ray instance for distributed computational power.
     :param fasta_file: String - the file path to the fasta formatted file.
     :param out_file: String - the path to the output kmer file - temporary processing file
     :param seqids: dictionary - the sequence ids as keys
@@ -131,13 +132,15 @@ def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
 
 def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
     """
-    This method retrieves
-    :param seqKmers: dictionary - the index as keys and seqeunce of the kmer
+    This method takes in the list of all possible kmers for the sequences
+    provided and writes them to a temporary processing file for downstream
+    searches
+    :param seqKmers: dictionary - the index as keys and sequences of the kmers
     :param fasta_file: String - the file path to the fasta sequence file
     :param out_dir: String - the file path to the output file
     :param prefix: String - the prefix for the output files
     :param n_threads: int - number of threads to be used in this process, default is 1
-    :return:
+    :return: list - a list of Strings for the paths to the temporary processing file
     """
     num_kmers = len(seqKmers)
     if num_kmers == 0:
@@ -155,11 +158,11 @@ def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
     batch_size = int(count_seqs / n_threads)
     num_workers = n_threads
     batches = []
-    #detemine the number of batches based on how many threads and the
+    #determine the number of batches based on how many threads and the
     #batch size calculated above
     for i in range(0,num_workers):
         batches.append(seq_ids[i*batch_size:i*batch_size+batch_size])
-    #use Ray to find the specific kmers from the dictionary of kmers
+    #use Ray to find the specific kmers for the from the dictionary of kmers
     aho = ray.put(init_automaton_dict(seqKmers))
     result_ids = []
     file_paths = []
