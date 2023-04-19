@@ -55,9 +55,7 @@ def parse_args():
     parser.add_argument('--outdir', type=str, required=True, help='Output Directory to put results')
     parser.add_argument('--prefix', type=str, required=False, help='Prefix for output files', default='cladeomatic')
     parser.add_argument('--root_name', type=str, required=False, help='Name of sample to root tree', default='')
-    parser.add_argument('--root_method', type=str, required=False, help='Method to root tree (midpoint,outgroup)',
-                        default=None)
-    parser.add_argument('--klen', type=int, required=False, help='kmer length', default=18)
+    parser.add_argument('--klen', type=int, required=False, help='kmer length', default=33)
     parser.add_argument('--min_members', type=int, required=False,
                         help='Minimum number of members for a clade to be valid', default=1)
     parser.add_argument('--min_snp_count', type=int, required=False,
@@ -187,13 +185,13 @@ def parse_group_file(file, delim=None):
 
     sample_map = {}
     # Add sample to each genotype determined
-    for row in df.itertuples():
+    for row in df.itertuples(index=True):
         sample_id = row.sample_id
-        sample_map[row.index] = {'sample_id': sample_id, 'genotype': row.genotype}
+        sample_map[sample_id] = {'sample_id': sample_id, 'genotype': row.genotype}
         genotype = row.genotype.split(delim)
         for i in range(1, len(genotype) + 1):
             g = "{}".format(delim).join([str(x) for x in genotype[0:i]])
-            groups[g].add(row.index)
+            groups[g].add(sample_id)
 
     return {'delimeter': delim, 'sample_map': sample_map, 'membership': groups,
             'genotypes': set(df['genotype'].tolist()), 'valid_nodes': valid_nodes}
@@ -453,16 +451,19 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
     for mkey in mutation_keys:
         if len(mutation_keys[mkey]['ref']) == 0 and len(mutation_keys[mkey]['alt']) == 0:
             mutations_keys_to_remove.append(mkey)
+
     filt = []
+    kmer_key = 0
     for i in range(0, len(scheme)):
         if len(scheme[i]['positive_genotypes']) == 0 and len(scheme[i]['partial_genotypes']) == 0:
             scheme[i]['kmer_entropy'] = max_entropy
         if scheme[i]['mutation_key'] in mutations_keys_to_remove:
             continue
+        scheme[i]['key'] = kmer_key
         filt.append(scheme[i])
-
+        kmer_key+=1
+    scheme = filt
     return scheme
-
 
 def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     vcf = vcfReader(input_vcf)
@@ -738,23 +739,36 @@ def write_biohansel_meta(scheme,out_file):
         fh.write("{}\t{}\t{}\n".format(id,scheme[id]['pos'],scheme[id]['target_base']))
     fh.close()
 
-def create_alt_psedo_sequence(ref_seq,positions,outfile):
+def create_alt_psedo_sequence(ref_seq,positions,msa_base_counts,outfile):
+    '''
+    Creates a sequence where ref state is updated to be a nt which is not present as a variant in the MSA
+    This is a workaround for a VCF file not reporting reference state data
+    Parameters
+    ----------
+    ref_seq - string
+    positions - list of ints
+    msa_base_counts - list of pos and dict of base counts
+    outfile - output fasta file
+
+    Returns
+    -------
+
+    '''
     alt_seq = list(ref_seq)
     bases = ['A','T','C','G']
-    basesr = range(0,len(bases))
     for pos in positions:
-        base = alt_seq[pos]
-        for i in basesr:
-            if basesr[i] != base:
-                alt_seq[pos] = bases[i]
-                break
+        bases_present = set()
+        for b in msa_base_counts[pos]:
+            if msa_base_counts[pos][b] > 1:
+                bases_present.add(b)
+        candidates = set(bases) - bases_present
+        if len(candidates) > 0:
+            alt_seq[pos] = list(candidates)[0]
+
     alt_seq = ''.join(alt_seq)
     fh = open(outfile,'w')
     fh.write(">alt_seq\n{}\n".format(alt_seq))
     fh.close()
-
-
-
 
 def run():
     """
@@ -775,7 +789,6 @@ def run():
     reference_file = cmd_args.reference
     prefix = cmd_args.prefix
     outdir = cmd_args.outdir
-    root_method = cmd_args.root_method
     root_name = cmd_args.root_name
     klen = cmd_args.klen
     rcor_thresh = cmd_args.rcor_thresh
@@ -874,9 +887,9 @@ def run():
     metadata = parse_metadata(metadata_file)
     #if the file is a tree file, validate and create a programmatic
     #ete3 tree file as per the rooting method passed - default is outgroup
+    root_method = 'outgroup'
     if mode == 'tree':
-        if root_method is None and root_name is not None:
-            root_method = 'outgroup'
+        root_method = 'outgroup'
 
         # validate samples present in all input files
         #construct the tree using the midpoint rooting method
@@ -884,8 +897,6 @@ def run():
                                   ladderize=True,
                                   method='midpoint')
         tree_samples = set(ete_tree_obj.get_leaf_names())
-        if root_method == 'midpoint':
-            root_name = ete_tree_obj.get_tree_root().name
 
         if root_name not in tree_samples:
             logging.error("Error specified root {} is not in tree: {}".format(root_name, tree_samples))
@@ -906,7 +917,7 @@ def run():
     else:
         #parse the group file
         group_data = parse_group_file(group_file, delim=delim)
-        group_samples = set(group_data['sample_list'])
+        group_samples = set(group_data['sample_map'].keys())
         sample_set = group_samples | vcf_samples | set(metadata.keys())
         missing_samples = sample_set - group_samples
 
@@ -1060,8 +1071,7 @@ def run():
         logging.info("Removing temporary analysis folder: {}".format(analysis_dir))
         shutil.rmtree(analysis_dir)
 
-
-
-    create_alt_psedo_sequence(ref_seq[ref_seq_id], cw.selected_positions, os.path.join(outdir,"{}-altseq.fasta".format(prefix)))
+    msa_base_counts = kw.msa_base_counts
+    create_alt_psedo_sequence(ref_seq[ref_seq_id], cw.selected_positions, msa_base_counts, os.path.join(outdir,"{}-altseq.fasta".format(prefix)))
 
     logging.info("Analysis complete")

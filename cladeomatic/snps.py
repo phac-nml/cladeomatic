@@ -14,9 +14,6 @@ def snp_search(group_data, vcf_file, assigned_row, offset=0):
     data = vcf.process_row()
     samples = vcf.samples
     snps = {}
-    count_snps = 0
-    if data is not None:
-        count_snps += 1
 
     sample_map = group_data['sample_map']
     sample_id_lookup = {}
@@ -122,6 +119,7 @@ def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group
     best_clade_id = -1
     best_clade_num = 0
     is_canonical = False
+    num_clade_members = 0
 
     for clade_id in group_membership:
         if is_canonical:
@@ -144,12 +142,15 @@ def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group
 
         oddsr, p = fisher_exact(table, alternative='greater')
 
+
+
         if (oddsr > best_oddsr or p < best_p) and len(pos_neg) == 0:
             best_clade_id = clade_id
             best_clade_num = len(group_membership[clade_id])
             best_p = p
             best_oddsr = oddsr
-            num_clade_members = num_pos_pos
+            num_clade_members = len(clade_members)
+
 
         if len(pos_neg) == 0 and len(neg_pos) == 0:
             is_canonical = True
@@ -157,7 +158,8 @@ def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group
             best_clade_num = len(group_membership[clade_id])
             best_p = p
             best_oddsr = oddsr
-            num_clade_members = num_pos_pos
+            num_clade_members = len(clade_members)
+
 
     return {'chrom': chrom, 'pos': pos, 'base': base,
             'clade_id': best_clade_id, 'is_canonical': is_canonical,'is_valid':True,
