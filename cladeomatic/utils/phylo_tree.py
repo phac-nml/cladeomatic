@@ -2,38 +2,33 @@ import os
 
 import dendropy
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, RectFace
+from deprecated import deprecated
 
 
 if not 'DISPLAY' in os.environ:
     os.environ['QT_QPA_PLATFORM']='offscreen'
 
+@deprecated()
 def tree_to_distance_matrix(tree_file,out_file):
-    '''
-
-    Parameters
-    ----------
-    tree_file
-    out_file
-
-    Returns
-    -------
-
-    '''
+    """
+    This method converts a dendropy tree object to a distance
+    matrix and writes this matrix to a csv file
+    :param tree_file: String - the path to the tree file (newick format only)
+    :param out_file: String - the path to the CSV output file for the distance
+    matrix
+    """
     tree = dendropy.Tree.get(path=tree_file, schema='newick')
     pdm = tree.phylogenetic_distance_matrix()
     pdm.write_csv(out_file)
 
+@deprecated()
 def get_pairwise_distances_from_matrix(matrix_file):
-    '''
-
-    Parameters
-    ----------
-    matrix_file: str path to file
-
-    Returns list of distances
-    -------
-
-    '''
+    """
+    This method gets the pairwise distances from the passed matrix file
+    and adds them to a list
+    :param matrix_file:
+    :return: list - the list of the pairwise distances
+    """
     dists = []
     with open(matrix_file,'r') as fh:
         line = next(fh)
@@ -43,14 +38,12 @@ def get_pairwise_distances_from_matrix(matrix_file):
         fh.close()
     return dists
 
-
-
 def remove_unsupported_clades(ete_tree_obj, valid_clades):
     """
     Remove non-leaf nodes from the tree while maintaining children
-    :param ete_tree_obj: [ETE obj] Phylogenetic tree
-    :param valid_clades: [list] Valid node names to maintain
-    :return: ete_tree_obj: [ETE obj] Phylogenetic tree with only nodes in the valid list
+    :param ete_tree_obj: ETE3 obj - Phylogenetic tree
+    :param valid_clades: list - Valid node names to maintain
+    :return: ete_tree_obj: ETE3 obj - Phylogenetic tree with only nodes in the valid list
     """
     tree = ete_tree_obj.copy()
 
@@ -64,16 +57,20 @@ def remove_unsupported_clades(ete_tree_obj, valid_clades):
             remove_node = False
         if remove_node:
             node.delete()
-
     return tree
 
+@deprecated()
 def prune_tree(ete_tree_obj,valid_nodes):
     """
-    :param ete_tree_obj: [ETE obj] Tree object
-    :param valid_nodes: [List] Node names which are valide
-    :return: [ETE Tree ] With only valid nodes
+    This method removes nodes from the ETE3 tree object
+    that are not part of the list of valid node names
+    :param ete_tree_obj: ETE3 obj - Tree object for pruning
+    :param valid_nodes: List - Node names which are valid
+    :return: list - A list of both the ETE3 tree object and the list
+    of only valid nodes
     """
     invalid_nodes = []
+    #traverse the tree to make a list of invalid nodes
     for node in ete_tree_obj.traverse("postorder"):
         node_id = node.name
         if node.is_leaf() or node_id not in valid_nodes:
@@ -113,11 +110,7 @@ def parse_tree(tree_file,logging,ete_format=0,set_root=False,resolve_polytomy=Tr
     method [str]: Method to root tree, either midpoint or outgroup
     outgroup [str] : Name of taxon to root tree on
 
-    Returns
-    -------
-
-    ETE tree obj
-
+    Returns ETE tree obj
     """
 
     logging.info("Attempting to parse tree file {}".format(tree_file))
@@ -203,10 +196,11 @@ def parse_tree(tree_file,logging,ete_format=0,set_root=False,resolve_polytomy=Tr
 
 def get_internal_clades(ete_tree_obj):
     """
-    Identify internal nodes in the ETE3 tree and return a dict of the samples associated with that clade
+    Identify internal nodes in the ETE3 tree and return a dict of the samples
+    associated with that clade
     Parameters
     ----------
-    ete_tree_obj [ETE tree obj] :
+    ete_tree_obj [ETE tree obj] :the ETE3 otree object for parsing
 
     Returns
     -------
@@ -223,7 +217,16 @@ def get_internal_clades(ete_tree_obj):
         clade_dict[clade_id] = children
     return clade_dict
 
+@deprecated()
 def init_clade_info(ete_tree_obj):
+    """
+    This method initializes the clade dictionary for the tree passed.
+    It parses the tree to find the internal clade memberships and
+    sets these to a dictionary
+    :param ete_tree_obj: ete3 tree object - the tree to parse for clade
+    memberships
+    :return: the initializd clade memberhsip dictionary for the tree passed
+    """
     clade_info = {}
     memberships = get_internal_clades(ete_tree_obj)
 
@@ -233,13 +236,27 @@ def init_clade_info(ete_tree_obj):
     return clade_info
 
 
+@deprecated()
 def get_tree_node_distances(ete_tree_obj):
+    """
+    This method creates a dictionary of tree distances for the
+    ETE3 tree object passed
+    :param ete_tree_obj: ETE3 object - the tree to determine distances for
+    :return: dictionary - the dictionary of the node name and the distance calculated
+    """
     distances = {}
     for node in ete_tree_obj.iter_descendants("preorder"):
         distances[node.name] = node.dist
     return distances
 
+@deprecated()
 def get_tree_node_bootstrap(ete_tree_obj):
+    """
+    A method to determine the branch support for the branches in the
+    ETE3 tree object passes
+    :param ete_tree_obj: ETE3 tree object - the tree to parse
+    :return: dictionary - the dictionary of node names and their support value
+    """
     support = {}
     for node in ete_tree_obj.iter_descendants("preorder"):
         support[node.name] = node.support

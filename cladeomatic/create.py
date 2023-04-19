@@ -28,7 +28,7 @@ def parse_args():
     A function to parse the command line arguments passed at initialization,
     format the arguments and return help prompts to the shell when
     needed
-    :return: An ArgumentParser object with the arguments required, the usage
+    :return: An ArgumentParser object - the arguments required, the usage
     help prompts and the correct formatting for the incoming argument (str, int, etc.)
     """
 
@@ -36,9 +36,9 @@ def parse_args():
         """
         Class to instantiate the formatter classes required for the argument parser.
         Required for the correct formatting of the default parser values
-        :param ArgumentDefaultsHelpFormatter: ensures the default values for the ArgumentParser
+        :param ArgumentDefaultsHelpFormatter object - ensures the default values for the ArgumentParser
         show up for the command line arguments
-        :param RawDescriptionHelpFormatter: ensures the correct display of the default values
+        :param RawDescriptionHelpFormatter object - ensures the correct display of the default values
         for the ArgumentParser
         """
         pass
@@ -55,7 +55,9 @@ def parse_args():
     parser.add_argument('--outdir', type=str, required=True, help='Output Directory to put results')
     parser.add_argument('--prefix', type=str, required=False, help='Prefix for output files', default='cladeomatic')
     parser.add_argument('--root_name', type=str, required=False, help='Name of sample to root tree', default='')
-    parser.add_argument('--klen', type=int, required=False, help='kmer length', default=33)
+    parser.add_argument('--root_method', type=str, required=False, help='Method to root tree (midpoint,outgroup)',
+                        default=None)
+    parser.add_argument('--klen', type=int, required=False, help='kmer length', default=18)
     parser.add_argument('--min_members', type=int, required=False,
                         help='Minimum number of members for a clade to be valid', default=1)
     parser.add_argument('--min_snp_count', type=int, required=False,
@@ -92,12 +94,13 @@ def parse_args():
 
 def validate_file(file):
     """
-    A function to parse the command line arguments passed at initialization,
-    format the arguments and return help prompts to the shell when
-    needed
-    :return: An ArgumentParser object with the arguments required, the usage
-    help prompts and the correct formatting for the incoming argument (str, int, etc.)
+    A method to determine if the file is valid.  Return true if
+    the file exists and is not empty.
+    :param file: String - path to the file
+    :return: boolean - True if the file exists and is not empty,
+    False otherwise
     """
+
     if os.path.isfile(file) and os.path.getsize(file) > 32:
         return True
     else:
@@ -106,8 +109,8 @@ def validate_file(file):
 def isint(str):
     """
     A function to determine if a string can be cast to an integer
-    :param str: the string to be tested
-    :return: boolean True if the string can be cast to an integer
+    :param str: String - the string to be tested
+    :return: boolean - True if the string can be cast to an integer
     """
     try:
         int(str)
@@ -116,11 +119,11 @@ def isint(str):
         return False
 
 def get_tree_genotypes(tree):
-    '''
-    Accepts a ETE3 tree object and returns the heirarchal node ids for every leaf
-    :param tree: ETE3 tree object
-    :return: dictionary of leaf names and list of node heirarchy
-    '''
+    """
+    Accepts a ETE3 tree object and returns the heirarchical node ids for every leaf
+    :param ETE3 tree object - the tree to be processed
+    :return: dictionary  - the leaf names and node heirarchy
+    """
     samples = tree.get_leaf_names()
     geno = {}
     for sample_id in samples:
@@ -137,26 +140,24 @@ def get_tree_genotypes(tree):
     return geno
 
 def parse_group_file(file, delim=None):
-    '''
-    Method to read the grouping file passed and construct an ete3 object from it
-    Parameters
-    ----------
-    file: TSV file which contains two columns [sample_id, genotype]
-    delim: character to split genotypes into levels, default is none
+    """
+    Method to read the grouping file passed and construct an ETE3 object from
+    values of the grouping file
+    :param file: String - path to TSV file which contains two
+    columns [sample_id, genotype]
+    :param delim: char - character to split genotypes into levels, default is None
     as it will be determined dynamically
-
-    Returns a dictionary of all of the clade memberships in the file:
+    :return: Dictionary - a dictionary of all of the clade memberships in the file:
     the delimiter used, the sample map, the membership groups, the genotype list,
     and valid tree nodes
-    -------
+    """
 
-    '''
     df = pd.read_csv(file, sep="\t", header=0)
     df = df.astype(str)
     groups = {}
     genotypes = df['genotype'].tolist()
 
-    # Determine delimiter
+    # Determine delimiter from the passed data file
     if delim == None:
         delim_counts = {
             '-': 0,
@@ -197,19 +198,14 @@ def parse_group_file(file, delim=None):
             'genotypes': set(df['genotype'].tolist()), 'valid_nodes': valid_nodes}
 
 def parse_tree_groups(ete_tree_obj, delim='.'):
-    '''
-    Method takes an ete3 tree object and constructs the group data and
-    returns it in the form of an ETE3 object
-    Parameters
-    ----------
-    ete_tree_obj: ETE3 tree object
-    delim: character to split genotypes into levels, default is '.', note delimiter
-    is contained in the ete3 object
-
-    Returns a dictionary of all of the clade memberships in the file
-    -------
-
-    '''
+    """
+    Method takes an ETE3 tree object, parses it, constructs the
+    group data and returns it in the form of an ETE3 object
+    :param ete_tree_obj: ETE3 tree object for parsing
+    :param delim: Char - the character to split genotypes into levels,
+    default is '.', note delimiter is contained in the ete3 object
+    :return: Dictionary - a dictionary of all of the clade memberships in the file
+    """
     genotypes = get_tree_genotypes(ete_tree_obj)
 
     id = 0
@@ -242,20 +238,16 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
             'genotypes': unique_genotypes, 'valid_nodes': valid_nodes}
 
 def find_overlaping_gene_feature(start, end, ref_info, ref_name):
-    '''
-    Method to find the overlapping gene features in the reference
-    sequence dictionary passed
-    Parameters
-    ----------
-    start - the coding sequence start
-    end - the coding sequence end
-    ref_info - the reference sequence dictionary
-    ref_name - the reference sequence name
-
-    Returns a dictionary of the gene feature
-    -------
-
-    '''
+    """
+    Method to find the overlapping gene features from the reference
+    sequence passed
+    :param start: int - an int for the start of the coding sequence
+    :param end: int - an int for the end of the coding sequence
+    :param ref_info: dictionary - a dictionary containing the reference sequence data
+    (sequences, features, coding regions, and their positions).
+    :param ref_name: String -  the name of the reference sequence
+    :return: dictionary - a dictionary of the gene features
+    """
     cds_start = start
     cds_end = end
     #if the refrence sequence name is not in the sequence dictionary
@@ -278,24 +270,31 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
 
 def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=11):
     """
-    This method creates the kmer-based scheme.
-    :param header: the header row of the scheme - default is SCHEME_HEADER from constants
-    :param ref_features: the reference features/genes
-    :param kmer_worker: the kmer_worker object that contains the kmer set,
-    scheme
-    :param sample_genotypes: the temporary
-    :param trans_table:
-    :return: a list for the formatted scheme
+    This method creates the kmer-based scheme.  The method iterates through
+    the k-mer worker object to obtain the kmer set, scheme data and rule set
+    along with the genotype list and reference features (if present) to
+    construct a scheme containing the SNP identifiers and kmer identifiers
+    for downstream use
+    :param header: String - a string for the header row of the scheme - default is
+    SCHEME_HEADER from constants
+    :param ref_features: dictionary - a dictionary for the reference features/genes
+    :param kmer_worker: kmer_worker object - the kmer_worker object that contains the kmer set,
+    scheme data, and rule set for scheme creation
+    :param sample_genotypes: dictionary - contarins the selected genotypes for the scheme
+    :param trans_table: int - the signifier for which NCBI amino acid translation table
+    you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code
+    (see https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi)
+    :return: list - a list for the formatted scheme with kmers and snps
     """
     perf_annotation = True
     ref_id = list(ref_features.keys())[0]
     ref_seq = ''
+    #add feature annotation if specified
     if not 'features' in ref_features[ref_id]:
         perf_annotation = False
         ref_seq = ref_features[ref_id]
     else:
         ref_seq = ref_features[ref_id]['features']['source']
-
 
     selected_kmers = kmer_worker.kmer_scheme_data
     kmer_rule_obj = kmer_worker.rule_set
@@ -304,17 +303,26 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
     unique_genotypes = set(sample_genotypes.values())
     num_genotypes = len(unique_genotypes)
     scheme = []
+    #initialization for the maximum value for the shannon's entropy calculation
     max_entropy = -1
     mutation_keys = {}
     kmer_key = 0
 
+    #loop through the selected kmers dictionary
     for pos in selected_kmers:
         ref_base = ref_seq[pos]
+        #ensure the reference base for the position in the ref sequence
+        #is not in the same position for the kmer - if so skip to avoid
+        #kmer duplication
         if not ref_base in selected_kmers[pos]:
             continue
+        #get the list of base keys for the kmers identified for the samples
+        #submitted
         bases = list(selected_kmers[pos].keys())
         alt_bases = []
 
+        #loop through the list of kmer keys - if the base is the same
+        #as the reference base, skip to avoid duplication
         for b in bases:
             if b == ref_base:
                 continue
@@ -325,27 +333,33 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
             # Skip positions where there are multiple kmers to represent a conserved kmer
             if len(selected_kmers[pos][ref_base]) > 1:
                 continue
-
+        #loop through the base keys to retreive details for the scheme
         for i in range(0, len(alt_bases)):
             alt_base = alt_bases[i]
+            #format the SNP name for the scheme
             mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
+            #loop through the base keys to find and append the kmers
             for k in range(0, len(bases)):
                 base = bases[k]
+                #format the DNA identifier for the scheme
                 dna_name = "{}{}{}".format(ref_base, pos + 1, base)
                 for kIndex in selected_kmers[pos][base]:
+                    #object dictionary for the scheme aspects
                     obj = {}
+                    #get the kmer sequence for the identifier passed
                     kseq = kmer_worker.get_kseq_by_index(kIndex)
-
+                    #create the scheme header in the object dictionary
                     for field_id in header:
                         obj[field_id] = ''
                     start = kmer_info[kIndex]['aln_start']
                     end = kmer_info[kIndex]['aln_end']
+                    #if there is annotation to be included, retreive it here
                     if perf_annotation:
                         gene_feature = find_overlaping_gene_feature(start, end, ref_features, ref_id)
                     else:
                         gene_feature = None
                         gene_name = 'Intergenic'
-
+                    #initialize the variables for the fields required for the scheme
                     ref_var_aa = ''
                     alt_var_aa = ''
                     is_cds = False
@@ -353,6 +367,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     is_silent = True
                     aa_name = ''
                     aa_var_start = -1
+                    #add and format the annotations for scheme additions
                     if gene_feature is not None:
                         is_cds = True
                         gene_name = gene_feature['gene_name']
@@ -382,7 +397,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                         aa_name = "{}{}{}".format(ref_var_aa, aa_var_start + 1, alt_var_aa)
                         if alt_var_aa != ref_var_aa:
                             is_silent = False
-
+                    #add the variable outputs for the scheme to the object dictionary
                     obj['key'] = kmer_key
                     obj['mutation_key'] = mutation_key
                     obj['dna_name'] = dna_name
@@ -418,7 +433,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
 
                     for j in range(0, num_found):
                         counts[j] = 1
-
+                    #calculate the shannon entropy
                     obj['kmer_entropy'] = calc_shanon_entropy(counts)
                     if max_entropy < obj['kmer_entropy']:
                         max_entropy = obj['kmer_entropy']
@@ -446,7 +461,8 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                     obj['is_silent'] = is_silent
                     scheme.append(obj)
                     kmer_key += 1
-
+    #clean up: remove any mutations that may have gotten through
+    #the original filtering
     mutations_keys_to_remove = []
     for mkey in mutation_keys:
         if len(mutation_keys[mkey]['ref']) == 0 and len(mutation_keys[mkey]['alt']) == 0:
@@ -466,22 +482,39 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
     return scheme
 
 def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
+    """
+    This method filters the VCF input file for invalid SNP sites, writes
+    a filtered VCF file to the path specified, and returns the number of
+    SNPs removed in the process
+    :param input_vcf: String - the file path to the input VCF file
+    :param output_vcf: String - the file path to the output filtered VCF file
+    :param max_states: int - maximum number of states
+    :param max_missing: int - maximum number of missing states
+    :return: int - for the number of SNPs removed
+    """
+    #read the vcf file and return the vcf object
     vcf = vcfReader(input_vcf)
+    #get the data from the VCF file in the form of a dictionary
     data = vcf.process_row()
+    #retrieve the sample information from the VCF file in the form of a
+    #list
     samples = vcf.samples
     num_samples = len(samples)
     if data is None:
         shutil.copy(input_vcf,output_vcf)
         return
 
-    invalid_positions = {
+    invalid_positions = {}
 
-    }
     while data is not None:
         chrom = data['#CHROM']
+        #initialize the invalid positions dictionary for the
+        #removal of invalid samples based on bad base calls
         if not chrom in invalid_positions:
             invalid_positions[chrom] = []
+
         pos = int(data['POS']) - 1
+        #initialize the counts for the bases
         base_counts = {
             'A':0,
             'T':0,
@@ -489,15 +522,19 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
             'G':0,
             'N':0
         }
+        #find the bad base calls
         for sample_id in samples:
             base = data[sample_id]
             if base not in ['A','T','C','G']:
                 base = 'N'
             base_counts[base]+=1
-
+        #if the ratio of bad calls to the numver of samples is
+        #greater than the max allowed missing samples
+        #add them to the invalid positions dictionary
         if base_counts['N'] / num_samples > max_missing:
             invalid_positions[chrom].append(pos)
 
+        #count the number of states in the VCF
         count_states = 0
         for base in ['A','T','C','G']:
             if base_counts[base] > 0:
@@ -505,11 +542,11 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
 
         if count_states == 1 or count_states > max_states:
             invalid_positions[chrom].append(pos)
-
+        #because this is python, re-initialize just in case
         data = vcf.process_row()
-
+    #nullify the vcf object instance
     del(vcf)
-
+    #open the input and output files, format and write the filtered output
     in_fh = open(input_vcf,'r')
     out_fh = open(output_vcf,'w')
     count_snps_removed = 0
@@ -538,8 +575,25 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     return count_snps_removed
 
 def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
+    """
+    This method is similar to the create_scehme method, but does not include
+    the kmer sequences added. The method iterates through
+    the genotype list from the clade object and reference features
+    (if present) to construct a scheme containing the SNP identifiers
+    and kmer identifiers for downstream use
+    :param header: String - the header for the scheme file
+    :param ref_features: Dictionary - the reference features/genes
+    :param clade_obj: CladeWorker object - the object from which to
+    retrieve the genotype list
+    :param trans_table: int - the signifier for which NCBI amino acid translation table
+    you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code
+    (see https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi)
+    :return: list - a list for the formatted scheme with snps
+    """
+    #retrieve the sample genotypes from the cladeworker object
     sample_genotypes = clade_obj.selected_genotypes
     perf_annotation = True
+    #retrieve the list of feature keys if they exist
     ref_id = list(ref_features.keys())[0]
     ref_seq = ''
     if not 'features' in ref_features[ref_id]:
@@ -547,27 +601,31 @@ def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
         ref_seq = ref_features[ref_id]
     else:
         ref_seq = ref_features[ref_id]['features']['source']
-
+    #retrieve the set of genotypes from the sample values
     unique_genotypes = set(sample_genotypes.values())
     num_genotypes = len(unique_genotypes)
+    #initialize variables
     scheme = []
     max_entropy = -1
     mutation_keys = {}
     row_index = 0
+    #retreive the rules
     rules = clade_obj.get_genotype_snp_rules()
     selected_pos_ref_states = clade_obj.selected_pos_ref_states
     valid_bases = ["A","T","C","G"]
     scheme = []
+    #loop through the reference dictionary for the scheme data
     for pos in selected_pos_ref_states:
         ref_base = selected_pos_ref_states[pos]
         alt_bases = []
         bases_present = []
+        #find the alternate bases aka mutations for scheme output
         for base in valid_bases:
             if len(rules[pos][base]['positive_genotypes'] ) > 0 or len(rules[pos][base]['partial_genotypes'] ):
                 bases_present.append(base)
                 if base != ref_base:
                     alt_bases.append(base)
-
+        #loop thorugh the alternate bases/mutations to create the scheme output
         for i in range(0, len(alt_bases)):
             alt_base = alt_bases[i]
             mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
@@ -681,9 +739,10 @@ def format_biohansel_scheme(biohansel_kmers,clade_obj):
     """
     A method to format the passed kmers and clade object to create a BioHansel
     compatible scheme
-    :param biohansel_kmers: the pre-formatted kmers list
-    :param clade_obj: the cladeworker object
-    :return: a dictionary of the scheme in BioHansel format
+    :param biohansel_kmers: list - the pre-formatted kmers list
+    :param clade_obj: cladeworker object - the clade worker object containing the data
+    required for scheme creation
+    :return: dictionary - a dictionary of the scheme in BioHansel format
     """
     valid_nodes = clade_obj.get_valid_nodes()
     node_heirarchy = {}
@@ -717,8 +776,8 @@ def format_biohansel_scheme(biohansel_kmers,clade_obj):
 def write_biohansel_scheme(scheme,fasta_file):
     """
     A method to format the passed scheme for BioHansel processsing
-    :param scheme: the scheme file
-    :param fasta_file: the file to which this method writes the scheme in
+    :param scheme: dictionary - the scheme data
+    :param fasta_file: String - the file to which this method writes the scheme in
     BioHansel format
     """
     fh = open(fasta_file,'w')
@@ -730,8 +789,8 @@ def write_biohansel_meta(scheme,out_file):
     """
     Method to write the BioHansel metadata table that includes the split
     k-mers and the actual SNPs interrogated
-    :param scheme: the scheme file for the data
-    :param out_file: the path to the biohandel metadata file
+    :param scheme: dictionary - the scheme data
+    :param out_file: string - the path to the BioHansel metadata file
     """
     fh = open(out_file,'w')
     fh.write("kmername\ttarget_pos\ttarget_base\n")
@@ -739,23 +798,20 @@ def write_biohansel_meta(scheme,out_file):
         fh.write("{}\t{}\t{}\n".format(id,scheme[id]['pos'],scheme[id]['target_base']))
     fh.close()
 
-def create_alt_psedo_sequence(ref_seq,positions,msa_base_counts,outfile):
-    '''
-    Creates a sequence where ref state is updated to be a nt which is not present as a variant in the MSA
-    This is a workaround for a VCF file not reporting reference state data
-    Parameters
-    ----------
-    ref_seq - string
-    positions - list of ints
-    msa_base_counts - list of pos and dict of base counts
-    outfile - output fasta file
-
-    Returns
-    -------
-
-    '''
+def create_alt_psedo_sequence(ref_seq,positions,outfile):
+    """
+    This method creates a pseudo alternate sequence for the reference seqeunce
+    with the SNP substitutions implemented and write the fasta file
+    to the path selected
+    :param ref_seq: String - the reference sequence
+    :param positions: list - list of the positions of the mutations
+    :param outfile: String - the output file path
+    """
+    #cast the string to an iterable list
     alt_seq = list(ref_seq)
     bases = ['A','T','C','G']
+    basesr = range(0,len(bases))
+    #loop through the positions of the mutations to sub in the alternate base
     for pos in positions:
         bases_present = set()
         for b in msa_base_counts[pos]:
@@ -970,7 +1026,6 @@ def run():
         sys.exit()
 
     #Filter vcf of invalid sites
-    ##max_site_ambig
     logging.info("Filtering VCF to remove sites which have > {} variants per site or > {} missing".format(max_states,max_site_ambig))
     filtered_vcf = os.path.join(outdir,"{}-filtered.vcf".format(prefix))
     count_snps_removed = filter_vcf(variant_file, filtered_vcf, max_states, max_site_ambig)

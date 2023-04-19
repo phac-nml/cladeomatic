@@ -5,8 +5,13 @@ from Bio import SeqIO
 
 from cladeomatic.utils.kmerSearch import SeqSearchController
 from cladeomatic.constants import IUPAC_LOOK_UP
+from deprecated import deprecated
 
 class kmer_worker:
+    """
+    The kmer_worker class that instantiates a number of class variables
+    for use in the creation of the kmer lists for further downstream processing
+    """
     # input
     ref_sequence = ''
     target_positions = []
@@ -55,6 +60,10 @@ class kmer_worker:
         return
 
     def workflow(self):
+        """
+        The workflow method to call all the methods to create the kmer lists
+        for further processing
+        """
         self.init_msa_base_counts()
         self.pop_msa_base_counts()
         self.find_variant_positions()
@@ -85,10 +94,21 @@ class kmer_worker:
 
 
     def init_msa_base_counts(self):
+        """
+        Method to initialize the msa base counts dictionary with the
+        number of each base for the length of the reference sequence set to
+        zero
+        """
         for i in range(0, self.ref_len):
             self.msa_base_counts[i] = {'A': 0, 'T': 0, 'C': 0, 'G': 0, 'N': 0, '-': 0}
 
     def pop_msa_base_counts(self):
+        """
+        Method to count or populate the base counts dictionary for the
+        bases in the fasta file passed.  For sequence in the fasta,
+        the position is referenced and the counter is updated for each base
+        that occurs in that position
+        """
         with open(self.msa_fasta_file, "r") as handle:
             for record in SeqIO.parse(handle, "fasta"):
                 seq = str(record.seq).upper()
@@ -98,10 +118,16 @@ class kmer_worker:
                         base = 'N'
                     self.msa_base_counts[pos][base] += 1
             handle.close()
-
     def find_variant_positions(self):
+        """
+        Method to find the sequence variants and their positions in the
+        msa_base_counts dictionary and assign the positions of the bases
+        to the variant_positions dictionary
+        """
         for pos in self.msa_base_counts:
             count_bases = 0
+            #ensure the base is valid and if there is more than one, add it
+            #as a variant
             for base in self.valid_bases:
                 if self.msa_base_counts[pos][base] > 0:
                     count_bases += 1
@@ -109,9 +135,15 @@ class kmer_worker:
                 self.variant_positions.append(pos)
 
     def get_optimal_kmer_position(self):
+        """
+        A method to determine the best kmer start positions for the
+        variant/snps positions found in the find_variant_positions method.
+        Set these kmer start positions in a list for further processing
+        """
         msa_len = self.ref_len
         klen = self.kmer_len
         local_kmer_start_positions = set()
+        #loop through the variant positions
         for pos in self.target_positions:
             start = pos - klen + 1
             if start < 0:
@@ -123,13 +155,17 @@ class kmer_worker:
             best_count_variable_sites = klen
             best_count_missing_sites = klen
             best_index = start
+            #determine the best start position for the kmer of the
+            #variant based on the reference sequence
             for i in interval:
                 variable_sites = 0
                 num_missing = 0
+
                 for k in range(i, i + klen + 1):
                     if k >= end:
                         break
                     num_bases = 0
+                    # determine if there are missing bases in the kmer
                     if self.msa_base_counts[k]['-'] > 0:
                         num_missing += 1
 
@@ -138,63 +174,88 @@ class kmer_worker:
                             num_bases += 1
                     if num_bases > 1:
                         variable_sites += 1
-
+                #the logic for choosing the best kmers
+                #if there is a snp present and the selected kmer has no missing bases,
+                #it is the best representative kmer
                 if variable_sites <= best_count_variable_sites:
                     if num_missing < best_count_missing_sites:
                         best_index = i
                         best_count_variable_sites = variable_sites
                         best_count_missing_sites = num_missing
+
                 local_kmer_start_positions.add(best_index)
         self.opt_kmer_start_positions = sorted(list(local_kmer_start_positions))
 
     def extract_kmers(self):
+        """
+        This method creates the dictionary of all the possible kmers
+        for the variants found in the sequences.
+        """
         msa_len = self.ref_len
         klen = self.kmer_len
         selected_kmers = {}
         canonical_pos = set(self.target_positions)
+        #read the fasta
         with open(self.msa_fasta_file, "r") as handle:
             for record in SeqIO.parse(handle, "fasta"):
                 seq = str(record.seq).upper()
+                #loop through the snp locations
                 for pos in self.target_positions:
                     base = seq[pos]
                     if base not in self.valid_bases:
                         continue
+                    #get the starting position for the kmer
                     s = pos - klen + 1
                     if s < 0:
                         s = 0
                     start_range = range(s, pos)
-
+                    #create a range of potential kmers for the snp based on the start position
                     for start_pos in start_range:
                         start = start_pos
 
                         end = start + klen
+                        #extract the kmer from the sequence
                         kseq = seq[start:end + 1]
                         min_ambig = kseq.count('N')
                         no_gap_len = len(kseq.replace("-", ""))
+                        # if the length of the kmer is longer than the specified kmer length
+                        # AND the end position is larger than the position of the snp
+                        # AND the number of ambiguous bases is less than or equal to the
+                        # set minimum ambiguous level
+                        # THEN shift the end less 1 base and remove ambiguous bases if present
                         while no_gap_len > klen and end > pos and kseq.count('N') <= min_ambig:
                             end -= 1
                             kseq = seq[start:end + 1]
                             no_gap_len = len(kseq.replace("-", ""))
                             if kseq.count('N') <= min_ambig:
                                 min_ambig = kseq.count('N')
-
+                        # if the length of the kmer is shorter than the specificed kmer length
+                        # AND the end position of the kmer is shorter than the sequence length
+                        # AND the number of ambiguous bases is less than or equal to the
+                        # set minimum ambiguous level
+                        # Then add a base to the kmer and remove ambiguous bases if present
                         while no_gap_len < klen and end < msa_len and kseq.count('N') <= min_ambig:
                             end += 1
                             kseq = seq[start:end + 1]
                             no_gap_len = len(kseq.replace("-", ""))
                             if kseq.count('N') <= min_ambig:
                                 min_ambig = kseq.count('N')
-
+                        # if the length of the kmer is shorter than the specificed kmer length
+                        # AND the start position of the kmer is negative
+                        # AND the number of ambiguous bases is less than or equal to the
+                        # set minimum ambiguous level
+                        # Then subtract a base to the kmer and remove ambiguous bases if present
                         while no_gap_len < klen and start > 0 and kseq.count('N') <= min_ambig:
                             start -= 1
                             kseq = seq[start:end + 1]
                             no_gap_len = len(kseq.replace("-", ""))
                             if kseq.count('N') <= min_ambig:
                                 min_ambig = kseq.count('N')
-
+                        #remove any ambiquous bases
                         kseq = seq[start:end + 1].replace('-', '')
                         if kseq.count('N') > self.max_ambig or len(kseq) != klen:
                             continue
+                        #create the kmer dictionary
                         tpos = set(range(start, end)) & canonical_pos
                         tpos_bases = {}
                         for p in tpos:
@@ -207,6 +268,11 @@ class kmer_worker:
         self.num_extracted_kmers = len(selected_kmers)
 
     def perform_kmer_search(self):
+        """
+        A method to retrieve the list of temporary files
+        listing all the possible kmers for the sequence files
+        given.
+        """
         seqkmers = {}
         index = 0
         for kmer in self.extracted_kmers:
@@ -216,6 +282,11 @@ class kmer_worker:
                                                      self.num_threads)
 
     def process_kmer_results(self):
+        """
+        This method process the all the kmers within the search file created
+        in the perform_kmer_search method to filter and find the list
+        of valid kmers for further processing
+        """
         invalid_kmers = set()
         genotype_mapping = self.genotype_membership
         for filename in self.kmer_search_files:
@@ -231,6 +302,8 @@ class kmer_worker:
 
                 if count == 0:
                     continue
+                #if there are more than 1 kmer in the search file,
+                #add it to the invalid list
                 if count > 1:
                     invalid_kmers.add(kIndex)
                 if not genoytpe in self.int_base_kmer_lookup[kIndex]['genotype_counts']:
@@ -239,6 +312,12 @@ class kmer_worker:
             self.flag_invalid_kmers(invalid_kmers)
 
     def flag_invalid_kmers(self, invalid_kmers):
+        """
+        This method takes the set of invalid kmer indexes
+        and flags the kmers in the extracted kmer dictionary
+        :param invalid_kmers: set - the set of ints for the kIndexes
+        of the invalid kmers
+        """
         kIndex = 0
         for kmer in self.extracted_kmers:
             if kIndex in invalid_kmers:
@@ -246,6 +325,11 @@ class kmer_worker:
             kIndex += 1
 
     def init_kmer_scheme_data(self):
+        """
+        A method to initialize the kmer scheme through the list of
+        target positions passed.  Adds blank entries to the kmer scheme
+        dictionary.
+        """
         kmer_data = {}
         for pos in self.target_positions:
             kmer_data[pos] = {
@@ -254,6 +338,10 @@ class kmer_worker:
         self.kmer_scheme_data = kmer_data
 
     def populate_kmer_scheme_data(self):
+        """
+        A method to populate the kmer scheme dictionary with the
+        processed kmers of the scheme data and extracted kmers
+        """
         scheme_data = self.kmer_scheme_data
         kmer_data = self.extracted_kmers
         index = 0
@@ -261,6 +349,7 @@ class kmer_worker:
         for kmer in kmer_data:
             is_valid = kmer_data[kmer]['is_valid']
             ovl_pos = kmer_data[kmer]['target_positions']
+            #if the kmer is not valid, skip it and increase the index
             if not is_valid:
                 index += 1
                 continue
@@ -275,6 +364,11 @@ class kmer_worker:
             index += 1
 
     def get_pos_without_kmer(self):
+        """
+        This method compiles a dictionary of missing kmer indexes as identifiers
+        and their SNP base.
+        :return: dictionary - the missing kmers and snp bases they flank
+        """
         missing = {}
         for pos in self.kmer_scheme_data:
             base_counts = self.msa_base_counts[pos]
@@ -290,7 +384,15 @@ class kmer_worker:
         return missing
 
     def construct_ruleset(self):
+        """
+        A method to construct and populate the kmer rule set dictionary
+        of the positive genotypes (the kmers that match or exceed the minimum percentage
+        of clade members to be positive for a kmer to be valid) and the partial
+        genotypes which are less than the minimum percentage
+        of clade members.
+        """
         genotype_map = self.genotype_membership
+        #Minimum percentage of clade members to be positive for a kmer to be valid
         min_perc = self.min_geno_perc
         genotype_counts = {}
         for sample_id in genotype_map:
@@ -323,11 +425,9 @@ class kmer_worker:
 
     def refine_rules(self):
         '''
-        Missing data can cause kmers to all be partial when there isn't an alternative kmer available for a genotype
-        This filters the rules to assign kmers to be positive for a genotype when there is only one kmer base state present for it
-        Returns
-        -------
-
+        Missing data can cause kmers to all be partial when there isn't an alternative
+        kmer available for a genotype.  This filters the rules to assign kmers to be
+        positive for a genotype when there is only one kmer base state present for it
         '''
         kmer_rules = self.rule_set
         #get all defined geneotypes in the snp scheme
@@ -346,6 +446,7 @@ class kmer_worker:
             genos_with_positive_kmer = set()
             snp_rule = self.genotype_snp_rules[pos]
             for base in self.kmer_scheme_data[pos]:
+                #create the sets for the positive and partial genotypes based on inclusion rules
                 for kIndex in self.kmer_scheme_data[pos][base]:
                     positive_genos[base] = positive_genos[base] | set(kmer_rules[kIndex]['positive_genotypes'])
                     partial_genos[base] = partial_genos[base] | set(kmer_rules[kIndex]['partial_genotypes'])
@@ -398,25 +499,36 @@ class kmer_worker:
         self.rule_set = kmer_rules
 
     def get_genotype_snp_states(self):
+        """
+        A method to find the valid SNPs in the genotype membership dictionary
+        previously constructed.
+        """
         with open(self.msa_fasta_file, "r") as handle:
             for record in SeqIO.parse(handle, "fasta"):
                 id = str(record.id).split("~")[0]
                 if id not in self.genotype_membership:
                     continue
                 seq = str(record.seq).upper()
+                #get the genotype id
                 genotype = self.genotype_membership[id]
+                #initialize the dictionary
                 if not genotype in self.genotype_snp_associations:
                     self.genotype_snp_associations[genotype] = {}
                 for pos in self.target_positions:
                     if not pos in self.genotype_snp_associations[genotype]:
                         self.genotype_snp_associations[genotype][pos] = set()
                     base = seq[pos]
+                    #if the base is not valid for the position chosen, do not add to dictionary
                     if not base in self.valid_bases:
                         continue
+                    #add the base change for the snp associated with the genotype id and sequence position
                     self.genotype_snp_associations[genotype][pos].add(base)
             handle.close()
 
     def confirm_kmer_specificity(self):
+        """
+        A method to further filter invalid kmers from the extracted kmer dictionary
+        """
         index = 0
         kmer_info = self.extracted_kmers
         invalid_kmers = set()
@@ -439,6 +551,11 @@ class kmer_worker:
         self.flag_invalid_kmers(invalid_kmers)
 
     def find_invalid_kmers(self):
+        """
+        A method to loop through the extracted kmer dictionary,
+        retrieve the flagged invalid kmers and add their indexes
+        to a set
+        """
         index = 0
         for kmer in self.extracted_kmers:
             if self.extracted_kmers[kmer]['is_valid'] == False:
@@ -446,11 +563,16 @@ class kmer_worker:
             index += 1
 
     def populate_int_base_kmer_lookup(self):
+        """
+        A method to instantiate the base kmer lookup dictionary
+        with a sequential index and the sequence of the kmer
+        """
         index = 0
         for kmer in self.extracted_kmers:
             self.int_base_kmer_lookup[index] = self.extracted_kmers[kmer]
             index += 1
 
+    @deprecated()
     def find_ovl_kmers(self):
         variant_postions = self.target_positions
         selected_kmers = self.kmer_scheme_data
@@ -478,12 +600,21 @@ class kmer_worker:
         return pot_pos_ovl
 
     def remove_invalid_kmers_from_scheme(self):
+        """
+        A method to remove the invalid kmers from the scheme data
+        dictionary
+        """
         for index in self.kmer_scheme_data:
             for base in self.kmer_scheme_data[index]:
+                #use the set data structure to remove the invalid
+                #kmers from the kmer scheme dictionary
                 ovl = set(self.kmer_scheme_data[index][base]) - self.invalid_kmer_indexes
                 self.kmer_scheme_data[index][base] = ovl
 
     def remove_empty_base_states(self):
+        """
+        A clean up method to remove the records with empty bases
+        """
         for index in self.kmer_scheme_data:
             for base in self.valid_bases:
                 if base not in self.kmer_scheme_data[index]:
@@ -492,6 +623,12 @@ class kmer_worker:
                     del (self.kmer_scheme_data[index][base])
 
     def remove_redundant_kmers(self):
+        """
+        A method to remove all but the best kmer sequences from the kmer scheme
+        data dictionary.  This is accomplished by revisiting the kmer rules sets
+        to find the best representative kmer and finally updates the kmer data scheme
+        dictionary
+        """
         kmer_info = self.int_base_kmer_lookup
         kmer_rules = self.rule_set
         bases = self.valid_bases
@@ -517,7 +654,8 @@ class kmer_worker:
                 kpos_geno_counts = {}
                 kpos_inf_scores = {}
                 kpos_kmer_index = {}
-
+                #loop through the kmer scheme dictionary to find the best kmer sequences
+                #with the best starting positions
                 for k in self.kmer_scheme_data[pos][b1]:
                     s = kmer_info[k]['aln_start']
                     if not s in kpos_geno_counts:
@@ -537,7 +675,7 @@ class kmer_worker:
                 best_start = list(kpos_inf_scores.keys())[0]
                 optimal_starts.append(best_start)
                 selected_kmers = selected_kmers | set(kpos_kmer_index[best_start])
-
+            #remove all but the best kmers found above
             for i in range(0, num_bases):
                 b1 = bases[i]
                 if b1 not in self.kmer_scheme_data[pos]:
@@ -546,6 +684,12 @@ class kmer_worker:
 
 
     def get_kseq_by_index(self,index):
+        """
+        A helper method to return the kmer sequence for the index passed
+        located in the extracted kmers dictionary
+        :param index: int - the index for the desired kmer
+        :return: String - the kmer sequence if found, an empty string if not
+        """
         i = 0
         for kmer in self.extracted_kmers:
             if i == index:
@@ -554,12 +698,23 @@ class kmer_worker:
         return ''
 
     def remove_scheme_pos(self,pos_to_remove):
+        """
+        A helper method to remove an entry in the kmer scheme data dictionary
+        based on the position passed
+        :param pos_to_remove: int - the index of the position to be removed
+        """
         for pos in pos_to_remove:
             if pos in self.kmer_scheme_data:
                 del(self.kmer_scheme_data[pos])
 
 
     def calc_consensus_seq(self):
+        """
+        A method to determine the consensus sequence for the fasta passed,
+        looping through the reference sequence
+        :return: String - the consensus sequence for the bases in the sequence
+        fasta passed
+        """
         consensus = []
         valid_bases = ['A','T','C','G']
         for pos in self.msa_base_counts:
@@ -577,6 +732,10 @@ class kmer_worker:
         return "".join(consensus)
 
     def create_biohansel_kmers(self):
+        """
+        A method to create the kmer list for the biohansel scheme
+        :return: dictionary - the dictionary of the kmers for biohansel scheme
+        """
         kmers = {}
         valid_bases = ['A', 'T', 'C', 'G']
         consensus = list(self.calc_consensus_seq())
@@ -585,6 +744,7 @@ class kmer_worker:
         msa_len = len(consensus)
         klen = self.kmer_len
         for pos in self.target_positions:
+            #skip any missing kmers
             if pos in self.positions_missing_kmer:
                 continue
             kmers[pos] = {
