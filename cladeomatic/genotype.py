@@ -175,7 +175,7 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
 
         filt = {}
         for genotype in result[sample_id]['predicted_genotype(s)']:
-            filt[genotype] = result[sample_id]['genoytpe_dists'][genotype]
+            filt[genotype] = result[sample_id]['predicted_genotype_dist']
             result[sample_id]['genoytpe_dists'] = {
                 'match':genoytpe_results[genotype]['match'],
                 'mismatch':genoytpe_results[genotype]['mismatch']
@@ -200,7 +200,6 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         for field in genotype_meta[genotype]:
             genotype_fields.add(field)
     genotype_fields = sorted(list(genotype_fields))
-
     header = header + sample_fields + genotype_fields
 
     #initialize file
@@ -226,9 +225,7 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         else:
             row['qc_messages'] = "Ambiguous genotype assignement, possible genotypes: {}".format(";".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']]))
 
-
-
-        fh.write("{}\n".format("\t".join(row)))
+        fh.write("{}\n".format("\t".join(row.values())))
 
     fh.close()
 
@@ -320,7 +317,7 @@ def run():
             genotype_results[sample_id] = r[sample_id]
     del(results)
     del(ray_results)
+    write_genotype_calls(GENOTYPE_REPORT_HEADER, os.path.basename(scheme_file), outfile, genotype_results, sample_metadata, genotype_metadata)
 
-    write_genotype_calls(outfile, sample_meta_fields, sample_metadata, genotype_results, genotype_metadata)
     logging.info("Analysis complete")
 
