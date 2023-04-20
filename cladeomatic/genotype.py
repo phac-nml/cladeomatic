@@ -7,7 +7,7 @@ from cladeomatic.utils import init_console_logger
 from cladeomatic.utils import parse_metadata
 import pandas as pd
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
-from cladeomatic.constants import GENOTYPE_REPORT_HEADER
+from cladeomatic.constants import GENOTYPE_REPORT_HEADER, MIN_FILE_SIZE
 from datetime import datetime
 
 
@@ -62,6 +62,85 @@ def get_snp_profiles(valid_positions, vcf_file):
         data = vcf.process_row()
 
     return profiles
+
+def parse_scheme_features(scheme_file):
+
+    features = {
+        'scheme':{},
+        'num_positions':0,
+        'num_mutations':0,
+        'total_scheme_features':0,
+        'mutation_lookup':{}
+    }
+
+    scheme = {}
+    df = pd.read_csv(scheme_file, sep="\t", header=0, low_memory=False)
+    snp_states = {}
+    num_positions = df['variant_start'].nunique()
+    num_features = df['mutation_key'].nunique()
+    features['total_scheme_features'] = len(df)
+    features['num_positions'] = num_positions
+    features['num_mutations'] = num_features
+
+    for row in df.itertuples():
+        state = row.state
+        mutation_key = row.mutation_key
+        target_variant = row.target_variant
+        variant_start = int(row.variant_start)
+        if not variant_start in features['mutation_lookup']:
+            features['mutation_lookup'][variant_start] = {'alt':{},'ref':{}}
+        features['mutation_lookup'][variant_start][state][target_variant] = mutation_key
+
+        positive_genotypes = row.positive_genotypes
+        if isinstance(positive_genotypes, float):
+            positive_genotypes = []
+        else:
+            positive_genotypes = positive_genotypes.split(',')
+
+        genotypes = positive_genotypes
+        for genotype in positive_genotypes:
+
+            if not genotype in scheme:
+                scheme[genotype] = {'positive': {}, 'partial': {}, 'allowed': {}}
+            if not variant_start in scheme[genotype]['positive']:
+                scheme[genotype]['positive'][variant_start] = set()
+            scheme[genotype]['positive'][variant_start].add(target_variant)
+
+        partial_genotypes = row.partial_genotypes
+
+        if not variant_start in snp_states:
+            snp_states[variant_start] = set()
+        snp_states[variant_start].add(target_variant)
+
+        if isinstance(partial_genotypes, float):
+            partial_genotypes = []
+        else:
+            partial_genotypes = partial_genotypes.split(',')
+        genotypes += partial_genotypes
+        if len(partial_genotypes) == 0:
+            continue
+        for genotype in partial_genotypes:
+            if not genotype in scheme:
+                scheme[genotype] = {'positive': {}, 'partial': {}, 'allowed': {}}
+            if not variant_start in scheme[genotype]['partial']:
+                scheme[genotype]['partial'][variant_start] = set()
+            scheme[genotype]['partial'][variant_start].add(target_variant)
+
+    for genotype in scheme:
+        for pos in snp_states:
+            allowed_bases = set()
+            if pos in scheme[genotype]['partial']:
+                allowed_bases = allowed_bases | set(scheme[genotype]['partial'][pos])
+            if pos in scheme[genotype]['positive']:
+                allowed_bases = allowed_bases | set(scheme[genotype]['positive'][pos])
+            if len(allowed_bases) == 0:
+                allowed_bases = snp_states[pos]
+            scheme[genotype]['allowed'][pos] = allowed_bases
+
+    features['scheme'] = scheme
+    return features
+
+
 
 def parse_scheme_genotypes(scheme_file):
     scheme = {}
@@ -129,8 +208,8 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
 
         result[sample_id] = {
             'predicted_genotype(s)':[],
-            'predicted_genotype_dist': 1,
-            'genoytpe_results':{},
+            'predicted_genotype_dist': [],
+            'genoytpe_results':[],
             'genoytpe_dists': {},
 
         }
@@ -165,28 +244,44 @@ def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
         result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
 
         pdist = 1
+
         for genotype in result[sample_id]['genoytpe_dists']:
             dist =  result[sample_id]['genoytpe_dists'][genotype]
 
             if dist <= pdist and dist <= max_dist:
                 result[sample_id]['predicted_genotype(s)'].append(genotype)
-                result[sample_id]['predicted_genotype_dist'] = dist
+                result[sample_id]['predicted_genotype_dist'].append(dist)
+                result[sample_id]['genoytpe_results'].append({'match':genoytpe_results[genotype]['match'],
+                                    'mismatch':genoytpe_results[genotype]['mismatch']})
                 pdist = dist
-
-        filt = {}
-        for genotype in result[sample_id]['predicted_genotype(s)']:
-            filt[genotype] = result[sample_id]['predicted_genotype_dist']
-            result[sample_id]['genoytpe_dists'] = {
-                'match':genoytpe_results[genotype]['match'],
-                'mismatch':genoytpe_results[genotype]['mismatch']
-            }
-        result[sample_id]['genoytpe_dists'] = filt
 
         del result[sample_id]['genoytpe_dists']
 
     return result
 
-def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_metadata,genotype_meta):
+
+def convert_features_to_mutations(feature_lookup,snp_profile):
+    found_features = {
+        'alt':set(),
+        'ref':set()
+    }
+    for pos in snp_profile:
+        if pos not in feature_lookup:
+            continue
+        base = snp_profile[pos]
+        for state in feature_lookup[pos]:
+            if base in feature_lookup[pos][state]:
+                found_features[state].add(feature_lookup[pos][state][base])
+                break
+
+
+    return found_features
+
+
+
+
+
+def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_metadata,genotype_meta, scheme_data, sample_variants,min_positions=1):
 
     #get all additional_fields
     sample_fields = set()
@@ -208,30 +303,59 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
 
     analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
+    num_positions = scheme_data['num_positions']
+    total_scheme_features = scheme_data['total_scheme_features']
+
+    print(header)
+
     for sample_id in genotype_results:
         row = {}
+        status = 'Pass'
         for field_id in header:
             row[field_id] = ''
         row['sample_id'] = sample_id
-        row['predicted_genotype(s)'] = '-'
+        row['predicted_genotype'] = '-'
         row['scheme'] = scheme_name
         row['analysis_date'] = analysis_date
+        row['total_scheme_features'] = total_scheme_features
+        row['unique_scheme_positions'] = num_positions
+
+        detected_mutations = convert_features_to_mutations(scheme_data['mutation_lookup'],sample_variants[sample_id])
+        row['num_detected_positions'] =  len(detected_mutations['alt'] | detected_mutations['ref'])
+        row['detected_alt_mutations'] = ";".join([str(x) for x in sorted(list(detected_mutations['alt']))])
+
+        for field_id in sample_metadata[sample_id]:
+            row[field_id] = sample_metadata[sample_id][field_id]
+
         if len(genotype_results[sample_id]['predicted_genotype(s)']) == 1:
             row['predicted_genotype'] = genotype_results[sample_id]['predicted_genotype(s)'][0]
+            row['predicted_genotype_distance'] = genotype_results[sample_id]['predicted_genotype_dist'][0]
             genotype = row['predicted_genotype']
             if genotype in genotype_meta:
                 for field_id in genotype_meta[genotype]:
                     row[field_id] = genotype_meta[genotype][field_id]
-        else:
+        elif len(genotype_results[sample_id]['predicted_genotype(s)']) > 1:
+            status = 'Warning'
             row['qc_messages'] = "Ambiguous genotype assignement, possible genotypes: {}".format(";".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']]))
+        else:
+            status = 'Warning'
+            row['qc_messages'] = 'No genotypes were compatible with the sample'
 
-        fh.write("{}\n".format("\t".join(row.values())))
+
+        if row['num_detected_positions'] < min_positions:
+            status = 'Fail'
+            row['qc_messages'] = 'Sample is missing too many positions for genotype call'
+
+        row['qc_status'] = status
+        print(row)
+        fh.write("{}\n".format("\t".join([str(x) for x in row.values()])))
 
     fh.close()
 
 def is_valid_file(filename):
     status = True
-    if not os.path.isfile(filename) or os.path.getsize(filename) <= 32:
+    if not os.path.isfile(filename) or os.path.getsize(filename) <= MIN_FILE_SIZE :
         status = False
     return status
 
@@ -273,8 +397,9 @@ def run():
         logging.error("Error file {} was not found or is empty".format(scheme_file))
         sys.exit()
 
+    scheme_data = parse_scheme_features(scheme_file)
+    genotype_rules = scheme_data['scheme']
 
-    genotype_rules = parse_scheme_genotypes(scheme_file)
     for genotype in genotype_rules:
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
@@ -317,7 +442,8 @@ def run():
             genotype_results[sample_id] = r[sample_id]
     del(results)
     del(ray_results)
-    write_genotype_calls(GENOTYPE_REPORT_HEADER, os.path.basename(scheme_file), outfile, genotype_results, sample_metadata, genotype_metadata)
+
+    write_genotype_calls(GENOTYPE_REPORT_HEADER, os.path.basename(scheme_file), outfile, genotype_results, sample_metadata, genotype_metadata, scheme_data,variants)
 
     logging.info("Analysis complete")
 

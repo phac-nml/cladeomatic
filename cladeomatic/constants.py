@@ -56,11 +56,9 @@ GENOTYPE_REPORT_HEADER = [
     'analysis_date',
     'total_scheme_features',
     'unique_scheme_positions',
-    'num_detected_features',
     'num_detected_positions',
     'predicted_genotype',
-    'mutations_supporting_prediction',
-    'confidence',
+    'predicted_genotype_distance',
     'qc_status',
     'qc_messages',
     'detected_alt_mutations'
