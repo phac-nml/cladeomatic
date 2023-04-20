@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument('--sample_meta', type=str, required=True, help='Tab delimited sample metadata', default=None)
     parser.add_argument('--genotype_meta', type=str, required=False, help='Tab delimited genotype metadata', default=None)
     parser.add_argument('--outfile', type=str, required=True, help='Output Directory to put results')
+    parser.add_argument('--max_missing_positions', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
@@ -307,7 +308,6 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
     num_positions = scheme_data['num_positions']
     total_scheme_features = scheme_data['total_scheme_features']
 
-    print(header)
 
     for sample_id in genotype_results:
         row = {}
@@ -348,7 +348,6 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
             row['qc_messages'] = 'Sample is missing too many positions for genotype call'
 
         row['qc_status'] = status
-        print(row)
         fh.write("{}\n".format("\t".join([str(x) for x in row.values()])))
 
     fh.close()
@@ -368,6 +367,7 @@ def run():
     genotype_meta_file = cmd_args.genotype_meta
     outfile = cmd_args.outfile
     num_threads = cmd_args.num_threads
+    max_missing_positions = cmd_args.max_missing_positions
 
     if not ray.is_initialized():
         ray.init(ignore_reinit_error=True, num_cpus=num_threads)
@@ -412,6 +412,7 @@ def run():
         for state in genotype_rules[genotype]:
             valid_positions += list(genotype_rules[genotype][state].keys())
     valid_positions = list(set(valid_positions))
+    min_positions = len(valid_positions) -max_missing_positions
 
     logging.info("Extracted {} genotyping positions".format(len(valid_positions)))
     logging.info("Reading snp data from vcf file {}".format(variant_file))
@@ -443,7 +444,7 @@ def run():
     del(results)
     del(ray_results)
 
-    write_genotype_calls(GENOTYPE_REPORT_HEADER, os.path.basename(scheme_file), outfile, genotype_results, sample_metadata, genotype_metadata, scheme_data,variants)
+    write_genotype_calls(GENOTYPE_REPORT_HEADER, os.path.basename(scheme_file), outfile, genotype_results, sample_metadata, genotype_metadata, scheme_data,variants, min_positions)
 
     logging.info("Analysis complete")
 
