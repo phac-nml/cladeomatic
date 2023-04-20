@@ -13,6 +13,12 @@ from cladeomatic.utils import fisher_exact
 
 
 class clade_worker:
+    """
+    The clade worker class provides methods to take the user
+    provided input and cluster the data, create and compress clades,
+    and further summarize the SNP variants within the samples.
+    """
+    #initialization of variables
     vcf_file = None
     metadata_dict = {}
     distance_matrix_file = None
@@ -86,6 +92,12 @@ class clade_worker:
         return
 
     def workflow(self):
+        """
+        The workflow method calls all the helper methods to process the input
+        according to both the input and the flags set by the user to determine
+        clade memberships, validate SNPs and if required, compress the resulting
+        clade
+        """
         self.raw_genotypes = self.generate_genotypes()
         self.snp_data = snp_search_controller(self.group_data, self.vcf_file, self.num_threads)
         self.summarize_snps()
@@ -101,6 +113,7 @@ class clade_worker:
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
         self.calc_node_associations_groups()
+        #re-get the valid notes following the above processing
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.dist_based_nomenclature()
@@ -135,16 +148,25 @@ class clade_worker:
         self.set_genotype_snp_rules()
 
     def update(self):
+        """
+        A method to call the various helper methods to update the clades
+        """
         self.check_nodes()
         valid_nodes = self.get_valid_nodes()
         self.set_valid_nodes(valid_nodes)
         self.supported_genotypes = self.generate_genotypes()
 
     def summarize_snps(self):
+        """
+        A method to loop through the snps identified and determine
+        if the snp is canonical and/or valid.  It also creates a list
+        of variant positions for downstream processing
+        """
         num_canonical = 0
         num_valid = 0
         variant_pos = []
         num_positions = 0
+        #loop through the snps identified from the vcf file
         for chrom in self.snp_data:
             num_positions = len(self.snp_data[chrom])
             for pos in self.snp_data[chrom]:
@@ -166,20 +188,27 @@ class clade_worker:
         self.variant_positions = variant_pos
 
     def compression_cleanup(self):
+        """
+        A method to clean up the clade following compression by
+        removing nodes who distance is below the threshold default or
+        as denoted by the user input
+        """
         node_below_threshold = set()
+        #loop through the clade ids to find nodes below the threshold distance
         for clade_id in self.clade_data:
             dist = self.clade_data[clade_id]['ave_within_clade_dist']
             if dist < self.max_snp_resolution_thresh:
                 node_below_threshold.add(clade_id)
 
         node_to_link_map = {}
+        #remake the cluster node map, eliminating possible duplicates and optimizing the data structure
         for link_id in self.cluster_to_node_mapping:
             node_id = self.cluster_to_node_mapping[link_id]
             if not node_id in node_to_link_map:
                 node_to_link_map[node_id] = set()
             node_to_link_map[node_id].add(link_id)
 
-        #Remove nodes which are less than the threshold
+        #Remove nodes which are less than the distance threshold
         genotype_assignments = {}
         for sample_id in self.supported_genotypes:
             genotype = self.supported_genotypes[sample_id].split(self.delim)
@@ -193,16 +222,22 @@ class clade_worker:
             genotype_assignments[sample_id] = filt
 
         terminal_nodes = set()
-
+        #determine which nodes are terminal nodes
         for sample_id in genotype_assignments:
             node_id = genotype_assignments[sample_id][-1]
             terminal_nodes.add(node_id)
 
+        #remove the nodes below the threshold
         valid_nodes = self.get_valid_nodes() - node_below_threshold
+        #add the terminal nodes as part of the valid nodes set
         valid_nodes = valid_nodes | terminal_nodes
         self.set_valid_nodes(valid_nodes)
 
     def get_selected_positions(self):
+        """
+        A helper method to retrieve the list of valid nodes
+        :return: list - a sorted list of positions for valid nodes
+        """
         selected_positions = set()
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_valid']:
@@ -210,17 +245,34 @@ class clade_worker:
         return sorted(list(selected_positions))
 
     def set_valid_nodes(self,valid_nodes):
+        """
+        Set the valid nodes in the data set
+        :param valid_nodes: set - the valid nodes to set in the data set
+        """
         self.group_data['valid_nodes'] = set(valid_nodes)
 
     def set_invalid_nodes(self,invalid_nodes):
+        """
+        A helper method to loop through all the invalid nodes in the set
+        and set these nodes as invalid in the clade data dictionary
+        :param invalid_nodes: set - the set of invalid nodes
+        """
         for node_id in invalid_nodes:
             self.clade_data[node_id]['is_valid'] = False
             self.clade_data[node_id]['is_selected'] = False
 
     def get_all_nodes(self):
+        """
+        Set the list of nodes as the valid nodes from the group data dictionary
+        """
         self.node_list = sorted(list(self.group_data['valid_nodes']))
 
     def get_valid_nodes(self):
+        """
+        A helper method to loop through all the nodes to find the
+        flagged valid nodes in the clade data set
+        :return: set - a set of all the valid nodes in the clade data
+        """
         valid_nodes = set()
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_valid']:
@@ -228,14 +280,26 @@ class clade_worker:
         return valid_nodes
 
     def get_terminal_nodes(self):
+        """
+        A helper method to find the terminal nodes in the genotypes set
+        created
+        :return: set - the set of terminal nodes
+        """
         genotypes = self.generate_genotypes()
         terminal_nodes = set()
+        #retrieve the terminal node from the genotypes set
         for sample_id in genotypes:
             terminal_nodes.add(genotypes[sample_id].split(self.delim)[-1])
 
         return terminal_nodes
 
     def get_selected_nodes(self):
+        """
+        A helper method to retreive the nodes that correspond to the
+        'is selected' flag within the clade data
+        :return: set - the nodes that correspond to the
+        'is selected' flag
+        """
         valid_nodes = set()
         for node_id in self.clade_data:
             if self.clade_data[node_id]['is_selected']:
@@ -243,6 +307,10 @@ class clade_worker:
         return valid_nodes
 
     def get_node_member_counts(self):
+        """
+        A helper method to count the number of distinct genotypes in the
+        sample data and set that to the node counts class variable
+        """
         counts = {}
         for sample_id in self.group_data['sample_map']:
             genotype = self.group_data['sample_map'][sample_id]['genotype'].split(self.delim)
@@ -253,6 +321,10 @@ class clade_worker:
         self.node_counts = counts
 
     def init_clade_data(self):
+        """
+        A method to initialize the clade data dictionary and all the
+        variables contained within for each items in the node list
+        """
         for node_id in self.node_list:
             self.clade_data[node_id] = {
                 'pos': [],
@@ -280,52 +352,68 @@ class clade_worker:
             }
 
     def populate_clade_data(self):
+        """
+        The method for populating clade data dictionary with the
+        canoncical snps in the snp data set.  Uses the clade id,
+        the position and variant base of the snp.
+        """
+        #loop through the bases of the snps identified
         for chrom in self.snp_data:
             for pos in self.snp_data[chrom]:
                 for base in self.snp_data[chrom][pos]:
+                    #if the snp is canonical, initialize the data in the clade data dictionary
                     if self.snp_data[chrom][pos][base]['is_canonical']:
                         clade_id = self.snp_data[chrom][pos][base]['clade_id'].split('.')[-1]
                         self.clade_data[clade_id]['pos'].append(pos)
                         self.clade_data[clade_id]['bases'].append(base)
 
     def check_nodes(self):
+        """
+        A method to check the valididate the various nodes in the clade data
+        """
         for node_id in self.clade_data:
+            #the node must have greater than the minimum number of members to be considered valide
             if self.clade_data[node_id]['num_members'] < self.min_member_count:
                 self.clade_data[node_id]['is_valid'] = False
                 self.clade_data[node_id]['is_selected'] = False
+            #the position must have greater than the minimum number of snps attached to be valid
             if len(self.clade_data[node_id]['pos']) < self.min_snp_count:
                 self.clade_data[node_id]['is_valid'] = False
                 self.clade_data[node_id]['is_selected'] = False
 
     def generate_genotypes(self):
-        '''
-
-        Parameters
-        ----------
-        group_data
-        delim
-
-        Returns
-        -------
-
-        '''
+        """
+        A method to generate the genotypes data dictionary.  This method
+        creates this set from the group data dictionary and extracts the
+        tree node and genotype from the sample map in the group data
+        :return: dictionary - a dictionary with the genotypes consisting of
+        tree node identifiers and genotype identifiers
+        """
+        #set a delimiter if none was defined
         if self.delim == None:
             self.delim = '.'
 
         genotypes = {}
+        #loop through the sample map of the group data dictionary
         for id in self.group_data['sample_map']:
             sample_id = self.group_data['sample_map'][id]['sample_id']
             genotype = [str(x) for x in self.group_data['sample_map'][id]['genotype'].split(self.delim)]
             filt_genotype = []
+            #filter for the valid nodes only
             for i in range(0, len(genotype)):
                 node_id = genotype[i]
                 if node_id in self.group_data['valid_nodes']:
                     filt_genotype.append(node_id)
-
             genotypes[sample_id] = "{}".format(self.delim).join(filt_genotype)
         return genotypes
 
     def snp_based_filter(self):
+        """
+        A helper method to filter the snps based on if they are valid
+        based on the number of max states for the snp positions and the
+        minimum member count.  The 'is valid' flag is set appropriately and
+        the snp data dictionary is updated
+        """
         for chrom in self.snp_data:
             for pos in self.snp_data[chrom]:
                 if len(self.snp_data[chrom][pos]) > self.max_states:
@@ -336,7 +424,13 @@ class clade_worker:
                             self.snp_data[chrom][pos][base]['is_valid'] = False
 
     def get_bifurcating_nodes(self):
+        """
+        A method to split nodes with more than one genotype node identifier,
+        the first is the parent and the second is the child node.  Set the
+        results in the bifurcating node dictionary
+        """
         nodes = {}
+        #unused
         valid_nodes = self.get_valid_nodes()
         genotypes = self.generate_genotypes()
         for sample_id in genotypes:
@@ -356,6 +450,12 @@ class clade_worker:
                 self.bifurcating_nodes[node_id] = nodes[node_id]
 
     def genotype_lookup(self,sample_list):
+        """
+        A helper method to retrieve the genotype from the sample id passed
+        :param sample_list: list - a list of sample ids
+        :return: dictionary - the dictionary of the genotypes for the list of
+        genotypes found
+        """
         lookup = {}
         genotypes = self.generate_genotypes()
         d = self.delim
@@ -365,37 +465,52 @@ class clade_worker:
         return lookup
 
     def calc_node_distances(self):
+        """
+        This method reads the distance matrix file previously created and
+        sets the node closest distance, the closest sample distances, the average
+        distances within the clade, total comparisons, and total distance
+        for each node in the clade data dictionary
+        """
         fh = open(self.distance_matrix_file,'r')
         header = next(fh).rstrip().split("\t")
         num_columns = len(header)
+        #get the sample id list from the header
         sample_list = header[1:]
         sample_lookup = self.genotype_lookup(sample_list)
         histo = {}
         index = 1
+        #go through the distance matrix entries
         for line in fh:
             line = line.rstrip().split("\t")
             sample_id_1 = line[0]
             nodes_1 = set(sample_lookup[sample_id_1])
+            #loop through the associated nodes
             for i in range(index,num_columns):
                 sample_id_2 = header[i]
+                #if the node id in the row is the same as the node id in the header, skip
                 if sample_id_1 == sample_id_2:
                     continue
+                #get the sample ids for the node
                 nodes_2 = set(sample_lookup[sample_id_2])
                 value = int(line[i])
+                #set up the histogram frequency data
                 if not value in histo:
                     histo[value] = 0;
                 histo[value] +=1
+                #create a set with the values common to both nodes - overlap
                 ovl = nodes_1 & nodes_2
+                #set the distance for the node id and how many comparisons were made
                 for node_id in ovl:
                     self.clade_data[node_id]['total_within_clade_dist'] += value
                     self.clade_data[node_id]['num_comparisons_within_clade_dist'] += 1
+                #create a set with values that do not overlap with the second node
                 no_ovl_1 =  nodes_1 - nodes_2
                 for node_id in no_ovl_1:
                     if self.clade_data[node_id]['closest_sample_id'] is None or self.clade_data[node_id]['closest_sample_dist'] < value:
                         self.clade_data[node_id]['clade_sample_id'] = sample_id_1
                         self.clade_data[node_id]['closest_sample_id'] = sample_id_2
                         self.clade_data[node_id]['closest_sample_dist'] = value
-
+                # create a set with values that do not overlap with the first node
                 no_ovl_2 =  nodes_2 - nodes_1
                 for node_id in no_ovl_2:
                     if self.clade_data[node_id]['closest_sample_id'] is None or self.clade_data[node_id][
@@ -408,11 +523,13 @@ class clade_worker:
 
         fh.close()
         for node_id in self.clade_data:
+            #calculate and set the average within clade distance of the samples
             if self.clade_data[node_id]['num_comparisons_within_clade_dist'] > 0:
                 ave = self.clade_data[node_id]['total_within_clade_dist'] / self.clade_data[node_id]['num_comparisons_within_clade_dist']
                 self.clade_data[node_id]['ave_within_clade_dist'] = ave
             sample_id_1 = self.clade_data[node_id]['clade_sample_id']
             sample_id_2 = self.clade_data[node_id]['closest_sample_id']
+            #if there are no samples associated with the node identifier, skip
             if sample_id_1 is None:
                 continue
             nodes_1 = sample_lookup[sample_id_1]
@@ -421,6 +538,7 @@ class clade_worker:
             if len(nodes_2) < num_nodes:
                 num_nodes = len(nodes_2)
             shared_parent = None
+            #verify the rootings/parent nodes
             for i in range(0,num_nodes):
                 n1 = nodes_1[i]
                 n2 = nodes_2[i]
@@ -429,23 +547,37 @@ class clade_worker:
             self.clade_data[node_id]['closest_clade_id'] = shared_parent
             self.clade_data[node_id]['closest_clade_dist'] = self.clade_data[node_id]['closest_sample_dist']
 
-
-
         self.distance_histo = histo
 
     def get_clade_distances(self):
+        """
+        This method loops though the clade data nodes for the average distances
+        within the clades and places them in a list
+        :return: list - a list of doubles for the average distances within the clades
+        """
         distances = []
         for node_id in self.clade_data:
             distances.append(self.clade_data[node_id]['ave_within_clade_dist'])
         return distances
 
     def get_inter_clade_distances(self):
+        """
+        This helper method loops through the nodes of the clade data dictionary
+        and creates a list of the closest clade distances for each node
+        :return: list - a list of the closest clade distances
+        """
         distances = []
         for node_id in self.clade_data:
             distances.append(self.clade_data[node_id]['closest_clade_dist'])
         return distances
 
     def get_close_nodes(self):
+        """
+        This helper method to find the nodes whose distances are smaller than
+        the minimum interclade distance set
+        :return: set - a set for the invalid nodes who violate the distance
+        constraint
+        """
         invalid_nodes = set()
         for node_id in self.clade_data:
             dist = self.clade_data[node_id]['closest_clade_dist']
@@ -456,16 +588,25 @@ class clade_worker:
         return invalid_nodes
 
     def partition_distances(self):
+        """
+        A helper method to determine the bins and partitions required for
+        the clades based on the average distances between these clades
+        :return: list - of the avearge distances for the clade for the calculated bins
+        """
         num_partitions = 10
+        #get the average distances between the clades
         distances = sorted(self.get_clade_distances())
         num_distances = len(distances)
+        #determine how many samples in a bin
         target_number_samples = int(num_distances / num_partitions)
 
         bins = {}
+        #initialize the bins
         for i in range(0,num_partitions):
             bins[i] = []
         bin_index = 0
-
+        #loop through the number of distances to add the distances to the
+        #correct bins
         for i in range(0,num_distances):
             d = distances[i]
 
@@ -475,6 +616,7 @@ class clade_worker:
             bins[bin_index].append(d)
 
         partitions = []
+        #loop through the bins to add the last distance in the bin to the partition
         for i in bins:
             if len(bins[i]) > 0:
                 partitions.append(bins[i][-1])
@@ -482,6 +624,10 @@ class clade_worker:
         return partitions
 
     def distance_node_binning(self):
+        """
+        A method to add the clade nodes to the bins as per the partition
+        distances determined in the partition_distances() method
+        """
         partition_dists = self.partition_distances()
         num_bins = len(partition_dists)
         bins = {}
@@ -497,6 +643,12 @@ class clade_worker:
         self.node_bins = bins
 
     def compress_heirarchy(self):
+        """
+        A method to compress the generated hierarchy based on the node bins
+        previously determined and the genotypes and removing nodes based
+        on if the nodes on the same branch belong to the same bins.  Valid
+        nodes are those nodes with are terminal and distinct
+        """
         node_bins = self.node_bins
         genotypes = self.generate_genotypes()
         invalid_nodes = set()
@@ -512,23 +664,31 @@ class clade_worker:
                 if n2 in self.bifurcating_nodes:
                     continue
                 for bin_id in node_bins:
+                    #if the nodes belong to the same bin, set the second node as invalid
                     if n1 in node_bins[bin_id] and n2 in node_bins[bin_id]:
                         invalid_nodes.add(n2)
                         break
         self.set_invalid_nodes(invalid_nodes)
+        #remove the invalid nodes from the set
         self.set_valid_nodes(self.get_valid_nodes() - invalid_nodes)
         terminal_nodes = set()
         genotypes = self.generate_genotypes()
+        #loop through to find the terminal nodes
         for sample_id in genotypes:
             genotype = genotypes[sample_id].split(self.delim)
             node_id = genotype[-1]
             if node_id in self.clade_data:
                 terminal_nodes.add(node_id)
+        #re-set the valid and invalid nodes based on the above compression
         invalid_nodes = invalid_nodes | (self.get_valid_nodes() - terminal_nodes)
         self.set_invalid_nodes(invalid_nodes)
         self.set_valid_nodes(terminal_nodes - invalid_nodes)
 
     def get_variant_positions(self):
+        """
+        A method to retrieve the variant positions from the snp data dictionary
+        :return: list - an integer list of the variant positions
+        """
         variant_positions = []
         for chrom in self.snp_data:
             for pos in self.snp_data[chrom]:
@@ -537,6 +697,11 @@ class clade_worker:
         return variant_positions
 
     def get_conserved_ranges(self):
+        """
+        A method to compile a list of sequence ranges for the variant positions
+        data list
+        :return: list - a list of the conserved ranges for the variant positions
+        """
         vpos = self.variant_positions
         num_pos = len(vpos)
         if vpos[0] > 0:
@@ -556,6 +721,12 @@ class clade_worker:
         return ranges
 
     def get_largest_conserved_pos(self):
+        """
+        A method to loop through the conserved sequence ranges determined through
+        the method get_conserved_ranges() and find the longest sequence and the
+        position for the snp contained therein
+        :return: int - the position for the
+        """
         ranges = self.get_conserved_ranges()
         if len(ranges) == 0:
             self.is_root_valid = False
@@ -577,6 +748,10 @@ class clade_worker:
         return pos
 
     def fix_root(self):
+        """
+        A helper method to reset the root of the clade with the snp contained
+        in largest conserved sequence
+        """
         pos = self.get_largest_conserved_pos()
         base = self.ref_seq[pos]
         self.clade_data['0']['pos'].append(pos)
@@ -585,6 +760,11 @@ class clade_worker:
         self.clade_data['0']['is_selected'] = True
 
     def perform_clustering(self):
+        """
+        A method to read the distance matix file created along with the
+        distance thresholds and perform the clustering though the
+        SciPy hierarchy methods
+        """
         data = pd.read_csv(self.distance_matrix_file, sep='\t', header=0, index_col=0)
         data_labels = data.columns.values
         distance_matrix = distance.squareform(data.values)
@@ -607,10 +787,21 @@ class clade_worker:
         self.sample_linkage_clusters = cluster_membership
 
     def create_cluster_membership_lookup(self):
+        """
+        A method that loops through the sample map dictionary
+        and if the sample id from the map matches the cluster
+        determined in the perform_clustering() method, the node ids
+        and sample map indexes are added to the dictionary
+        :return: dictionary - a dictionary with the sample map indexes
+        and node ids clustered
+        """
         nodes = {}
         sample_map = self.group_data['sample_map']
         for index in sample_map:
             sample_id = sample_map[index]['sample_id']
+            #retrieve the node from the clusters that corresponds
+            #to the sample id from the group data and set that node
+            #id and the sample index in the dictionary
             for node_id in self.sample_linkage_clusters[sample_id]:
                 if not node_id in nodes:
                     nodes[node_id] = set()
@@ -618,28 +809,46 @@ class clade_worker:
         return nodes
 
     def fit_clusters_to_groupings(self):
+        """
+        A method to map the clusters created to the nodes previously identified.
+        :return: dictionary - a dictionary for the mapping of nodes to clusters
+        """
         cluster_to_node_mapping = {}
         sl_cluster_membership = self.create_cluster_membership_lookup()
+        #loop through the clusters in the cluster memberships
         for sl_clust_id in sl_cluster_membership:
             clust_members = sl_cluster_membership[sl_clust_id]
             best_node_id = '0'
             best_node_nonmembers = len(self.group_data['membership'])
+            #loop through the group data membership nodes
             for node_id in self.group_data['membership']:
                 node_members = self.group_data['membership'][node_id]
+                #find the node members unique to the cluster memberships
                 missing = clust_members - node_members
+                #skip the next part if there are missing node members in the cluster
                 if len(missing) > 0:
                     continue
+                #find the nonmembers that are unique to the group data membership
                 nonmembers = node_members - clust_members
                 count_nonmembers = len(nonmembers)
+                #if the count of the non members is smaller than the best count
+                #set the variables to find the group that has least difference
+                #between sets
                 if count_nonmembers < best_node_nonmembers:
                     best_node_id = node_id
                     best_node_nonmembers = count_nonmembers
                 if count_nonmembers == 0:
                     break
+            #map the cluster id to the best node members
             cluster_to_node_mapping[sl_clust_id] = best_node_id.split(self.delim)[-1]
         return cluster_to_node_mapping
 
     def identify_dist_ranges(self):
+        """
+        A method to identify the troughs within the histogram data
+        :return: list - a list of tuples for the range of the troughs
+        """
+        #order the histogram dictionary
         histo = OrderedDict(sorted(self.distance_histo.items()))
         histo_keys = list(histo.keys())
         max_value = histo_keys[-1]
@@ -661,6 +870,11 @@ class clade_worker:
         return ranges
 
     def dist_based_nomenclature(self):
+        """
+        A method to find the genotype identifiers from clustered data
+        and format it based on the distances found
+        """
+        #perform the clustering
         self.dist_ranges = self.identify_dist_ranges()
         self.perform_clustering()
         clust_to_node_mapping = self.fit_clusters_to_groupings()
@@ -669,6 +883,7 @@ class clade_worker:
         for sample_id in self.sample_linkage_clusters:
             clust_geno = self.sample_linkage_clusters[sample_id]
             node_geno = []
+            #map the cluster to the nodes
             for clust_id in  clust_geno:
                 node_id = clust_to_node_mapping[clust_id]
                 node_geno.append(node_id)
@@ -683,10 +898,12 @@ class clade_worker:
         self.sample_dist_based_nomenclature = sample_genotypes
 
     def find_dist_troughs(self,values):
-        '''
-        :param values: list
-        :return:
-        '''
+        """
+        Uses the SciPy method find_peaks to locate the troughs
+        (reverse peaks) in the data
+        :param values: list - the list of data values to find the troughs for
+        :return: ndarray - troughs, dictionary - properties
+        """
         return (find_peaks(-np.array(values)))
 
     def as_range(self,values):
@@ -757,6 +974,11 @@ class clade_worker:
         self.selected_genotypes = self.generate_genotypes()
 
     def calc_metadata_counts(self,sample_set):
+        """
+        A method to count the metadata values in the sample set
+        :param sample_set: set - the samples to tabulate metadata counts
+        :return: a dictionary for the metadta field id, value and the value counts
+        """
         metadata_counts = {}
         for sample_id in self.metadata_dict:
             if sample_id not in sample_set:
@@ -771,12 +993,11 @@ class clade_worker:
         return metadata_counts
 
     def calc_node_associations_groups(self):
-        '''
-        :param metadata:
-        :param clade_data:
-        :param ete_tree_obj:
-        :return:
-        '''
+        """
+        A method to loop through the metadata counts to
+        calculate the fishers exact test for the node associations
+        in the clades determined
+        """
         samples = set(self.metadata_dict.keys())
         num_samples = len(samples)
         metadata_counts = self.calc_metadata_counts(samples)
@@ -819,17 +1040,13 @@ class clade_worker:
                     self.clade_data[clade_id]['fisher'][field_name] = {'oddsr': oddsr, 'p': p}
 
     def temporal_signal(self):
-        '''
-        Parameters
-        ----------
-        metadata
-        clade_data
-        ete_tree_obj
-        rcor_thresh
-        Returns
-        -------
-        '''
-
+        """
+        A method to calculate the spearman and pearson's coefficients
+        from the metadata for the year and the calculated clade distances
+        previously determined.  If the spearman or pearson coefficients are
+        larger than the pre-determined threshold, the temporal flag is set
+        to 'True' in the clade data for the node
+        """
         sample_id = list(self.metadata_dict.keys())[0]
         if 'year' not in self.metadata_dict[sample_id]:
             return
@@ -897,12 +1114,23 @@ class clade_worker:
             self.clade_data[node_id]['is_temporal_signal_present'] = is_present
 
     def clade_snp_count(self):
+        """
+        A method to aggregate the count for the number of clade node
+        members based on the clade id
+        :return: dictionary - a dictionary of the counts for the clade node members
+        """
         counts = {}
         for node_id in self.clade_data:
             counts[node_id] = len(self.clade_data[node_id]['pos'])
         return counts
 
     def clade_snp_association(self):
+        """
+        A method to loop through the clade and find the associated
+        snp names for each clade
+        :return: dictionary - a dictionary for the snp name and
+        associated clade node id
+        """
         snps = {}
         for node_id in self.clade_data:
             for idx,pos in enumerate(self.clade_data[node_id]['pos']):
@@ -914,6 +1142,11 @@ class clade_worker:
         return snps
 
     def prune_snps(self):
+        """
+        A method to prune the nodes in the clade based on the max_snps constraint.
+        If there are more snp entries for the clade node, then some are removed
+        randomly.
+        """
         max_snps = self.max_snp_count
         node_counts = self.clade_snp_count()
         nodes_to_prune = []
@@ -934,12 +1167,17 @@ class clade_worker:
         for node_id in self.clade_data:
             if node_counts[node_id] < max_snps:
                 continue
+            #determine if there is overlap between the clade-snp association
+            #and the selected snps
             no_ovl = set(self.clade_data[node_id]['pos']) - selected_snps
             if len(no_ovl) == 0:
                 continue
             ovl = set(self.clade_data[node_id]['pos'])  - no_ovl
             pos = []
             bases = []
+            #if the overlaping snps list is larger than the max snps constraint
+            #shuffle the set and remove the required amount of snps for the
+            #constraint
             if len(ovl) < max_snps:
                 c = list(no_ovl)
                 random.shuffle(c)
@@ -955,6 +1193,11 @@ class clade_worker:
         self.selected_positions = self.get_selected_positions()
 
     def set_genotype_snp_states(self):
+        """
+        This method sets the genotype data, genotype and base counts,
+        the snp position, and in the genotype data for the
+        genotype_snp_data data dictionary
+        """
         selected_positions = self.selected_positions
         vcf = vcfReader(self.vcf_file)
         data = vcf.process_row()
@@ -1001,6 +1244,12 @@ class clade_worker:
 
 
     def set_genotype_snp_rules(self):
+        """
+        This method sets the genotype and snp rules for what is a
+        positive and partial genotype within the genotype_snp associated
+        data dictionary based on what the minimum percentage of clade members
+        that need to be positive for a kmer to be valid
+        """
         valid_bases = ["A","T","C","G"]
         rules = {}
         for pos in self.selected_positions:
@@ -1021,49 +1270,7 @@ class clade_worker:
         self.genotype_snp_rules = rules
 
     def get_genotype_snp_rules(self):
+        """
+        :return: dictionary - the genotype snp rules dictionary
+        """
         return self.genotype_snp_rules
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
