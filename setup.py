@@ -62,7 +62,8 @@ setup(
         'DendroPy',
         'pyahocorasick',
         'PyQt5',
-        'ray'
+        'ray',
+        'deprecated'
 
     ],
 

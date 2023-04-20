@@ -798,7 +798,7 @@ def write_biohansel_meta(scheme,out_file):
         fh.write("{}\t{}\t{}\n".format(id,scheme[id]['pos'],scheme[id]['target_base']))
     fh.close()
 
-def create_alt_psedo_sequence(ref_seq,positions,outfile):
+def create_alt_psedo_sequence(ref_seq,positions,msa_base_counts,outfile):
     """
     This method creates a pseudo alternate sequence for the reference seqeunce
     with the SNP substitutions implemented and write the fasta file
