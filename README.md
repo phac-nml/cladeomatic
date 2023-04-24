@@ -32,8 +32,7 @@ Clade-o-matic is a phylogenetic approach for identification of hierarchal genoty
 
 Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/requirements.txt) file, should be automatically installed when using conda or pip)
 
-In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
-
+In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/), [psutil 5.9.1](https://github.com/giampaolo/psutil), [scikit-learn 1.1.1](https://scikit-learn.org)and [snp-dists 0.8.2](https://github.com/tseemann/snp-dists).
 Install the latest released version from conda:
 
         conda create -c bioconda -c conda-forge -n cladeomatic cladeomatic
@@ -44,7 +43,10 @@ Install using pip:
 
 Install the latest master branch version directly from Github:
 
-        conda install jellyfish
+        conda install jellyfish=2.30
+        conda install psutil=5.9.1
+        conda install scikit-learn=1.1.1
+        conda install snp-dist=0.8.2
         pip install git+https://github.com/phac-nml/cladeomatic.git
 
 
@@ -102,21 +104,26 @@ Input requirements are:
 
 ```
 OutputFolderName
-├── {prefix}-clade.snp.histo.html [Tree Mode Only]
+├── {prefix}-altseq.fasta
+├── {prefix}-biohansel.fasta
+├── {prefix}-biohansel.meta.txt
 ├── {prefix}-clades.info.txt
-├── {prefix}-filt.kmers.txt
+├── {prefix}-dist.mat.txt
+├── {prefix}-extracted.kmers.txt
+├── {prefix}-filtered.vcf
+├── {prefix}-genotypes.distance.txt
 ├── {prefix}-genotypes.raw.txt
-├── {prefix}-genotypes.supported.txt
 ├── {prefix}-genotypes.selected.txt
-├── {prefix}-genotype.consenus.fasta
-├── {prefix}-jellyfish.counts.txt
-├── {prefix}-scheme.txt
-├── {prefix}-snps.all.txt
+├── {prefix}-genotypes.supported.txt
+├── {prefix}-kmer.scheme.txt
+├── {prefix}-params.log
+├── {prefix}-sample.distances.html
+├── {prefix}-snps.scheme.txt
+├── {prefix}-snps.info.txt
 ├── pseudo.seqs.fasta
-├── samples.dists.matrix.csv [Tree Mode Only]
 └──
 ```
-
+<!--
 **Benchmark Scheme:**
 Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
 Input requirements are: 
@@ -137,7 +144,7 @@ OutputFolderName
 ├── {prefix}-scheme.scores.txt
 └── {prefix}-scheme.calls.txt
 ```
-
+-->
 ## FAQ
 
 ## Citation
