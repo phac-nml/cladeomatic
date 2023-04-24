@@ -83,7 +83,7 @@ Input requirements are:
 * Reference sequence (.fasta / .gbk)
 * Name of outgroup sequence
 * Metadata file<br />
-  
+
 
     cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
 
@@ -95,7 +95,7 @@ Input requirements are:
 * Reference sequence (.fasta / .gbk)
 * Name of outgroup sequence
 * Metadata file<br />
-  
+
 
     cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
   
