@@ -20,6 +20,8 @@ Check out the :doc:`start` section for the Quick Start guide, including how to
    self
    start
    usage
+   legal
+   api
    :maxdepth: 3
    :hidden:
 

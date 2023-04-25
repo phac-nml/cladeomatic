@@ -151,7 +151,7 @@ OutputFolderName
 
 ## Legal
 
-Copyright Government of Canada 2022
+Copyright Government of Canada 2023
 
 Written by: National Microbiology Laboratory, Public Health Agency of Canada
 

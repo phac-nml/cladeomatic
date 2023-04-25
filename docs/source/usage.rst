@@ -25,16 +25,15 @@ One of the main menu options below must be selected
 
 **Create Scheme**
 
-De novo tree data basic usage, ensure the ``--in_nwk`` option is selected
+De novo tree data basic usage, ensure the ``--in_nwk`` option is selected:
 
 ``cladeomatic create --in_nwk tree.nwk --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
-Group data basic usage, ensure the ``--in_groups`` option is selected
+Group data basic usage, ensure the ``--in_groups`` option is selected:
 
 ``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
-
-.. csv-table::
+.. csv-table:: **Create Scheme Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
    :widths: 15, 10, 30, 10, 10
 
@@ -69,7 +68,20 @@ Group data basic usage, ensure the ``--in_groups`` option is selected
 
 **Genotyping**
 
-.. csv-table:: Main Clade-o-matic Options
-   :header: "Argument", "Required", "Description"
-   :widths: 15, 10, 30
+Basic usage options:
 
+``cladeomatic genotype --in-var variants.vcf --in_scheme scheme.txt --sample_meta metadata.txt --outfile genotypes/``
+
+.. csv-table:: **Genotyping Options**
+   :header: "Argument", "Required", "Description", "Input type", "Default Value"
+   :widths: 15, 10, 30, 10, 10
+
+    "--in_var", True, "Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)", String
+    "--in_scheme", True, "Tab delimited scheme file produced by clade-o-matic", String
+    "--sample_meta", True, "Tab delimited sample metadata", String
+    "--genotype_meta", False, "Tab delimited genotype metadata", String
+    "--outfile", True, "Output Directory to put results", String
+    "--max_missing_positions", False, "Maximum number of missing positions for the genotype", Integer, 1
+    "--num_threads", False, "Number of threads to use", Integer, 1
+    "-V", False, "Provide the version number for this build"
+    "--version", False, "Provide the version number for this build"

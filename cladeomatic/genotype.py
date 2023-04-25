@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument('--sample_meta', type=str, required=True, help='Tab delimited sample metadata', default=None)
     parser.add_argument('--genotype_meta', type=str, required=False, help='Tab delimited genotype metadata', default=None)
     parser.add_argument('--outfile', type=str, required=True, help='Output Directory to put results')
-    parser.add_argument('--max_missing_positions', type=int, required=False, help='Number of threads to use', default=1)
+    parser.add_argument('--max_missing_positions', type=int, required=False, help='Maximum number of missing positions for the genotype', default=1)
     parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
