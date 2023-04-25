@@ -31,3 +31,18 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = 'alabaster'
 html_static_path = ['_static']
+html_logo = '_static/logo.png'
+html_title = "Clade-o-matic"
+globaltoc_includehidden = True
+html_sidebars = {
+    '**': [
+        'globaltoc.html',
+        'relations.html',
+        'searchbox.html'
+    ]
+}
+
+html_theme_options = {
+    'logo_only': True,
+    'display_version': False,
+}

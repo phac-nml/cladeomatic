@@ -66,10 +66,12 @@ If you run ``cladeomatic``, you should see the following usage statement:
 
     Available commands:
 
-    create  Define lineages and create a kmer scheme
-    benchmark  Benchmark a kmer scheme
-    test     Test parsityper functionality on a small dataset [ not implemented]
-    version  Print version and exit
+    create     Identify population structure and develop typing scheme
+    genotype   Call genotypes from a VCF and a scheme file
+    benchmark  Test developed scheme using labeled samples and scheme*
+    namer      Rename genotypes within a scheme*
+    
+    *Coming soon
 
 Quick start
 =====
@@ -84,8 +86,7 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file<br />
 
-
-    cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
 Option 2 - Predefined groups <br />
 This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements. 
@@ -96,8 +97,7 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file<br />
 
-
-    cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
   
 
 **Outputs:**

@@ -17,8 +17,11 @@ Check out the :doc:`start` section for the Quick Start guide, including how to
 :ref:`install <installation>` and :ref:`run <quickstart>` Clade-o-matic.
 
 .. toctree::
+   self
    start
+   usage
    :maxdepth: 3
+   :hidden:
 
 Indices and tables
 ------------------

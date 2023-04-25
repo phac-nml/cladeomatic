@@ -34,6 +34,33 @@ Install the latest master branch version directly from Github:
 
 **Quick Start**
 ---------------
+**Basic Usage**
+
+If you run ``cladeomatic``, you should see the following usage statement:
+
+.. code-block:: console
+
+    Usage: cladeomatic <command> [options] <required arguments>
+
+    To get minimal usage for a command use:
+    cladeomatic command
+
+    To get full help for a command use one of:
+    cladeomatic command -h
+    cladeomatic command --help
+
+    Available commands:
+
+    create     Identify population structure and develop typing scheme
+    genotype   Call genotypes from a VCF and a scheme file
+    benchmark  Test developed scheme using labeled samples and scheme*
+    namer      Rename genotypes within a scheme*
+
+    *in development
+
+
+For further reference on the options available, refer the the :doc:`usage` guide.
+
 **Create Scheme**
 Option 1 - De novo tree-based
 
@@ -47,9 +74,7 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file
 
-.. code-block:: console
-
-    cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
 Option 2 - Predefined groups
 
@@ -63,9 +88,7 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file
 
-.. code-block:: console
-
-    cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
 
 Outputs:
@@ -90,7 +113,3 @@ OutputFolderName
 * {prefix}-snps.info.txt
 * pseudo.seqs.fasta
 
-.. _usage:
-
-**Usage**
----------
