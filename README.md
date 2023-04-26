@@ -28,14 +28,11 @@ Clade-o-matic is a phylogenetic approach for identification of hierarchal genoty
 
 Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/requirements.txt) file, should be automatically installed when using conda or pip)
 
-<<<<<<< HEAD
 In addition to the python dependencies, Clade-o-Matic requires:
 [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
 [snp-dists 0.8.2](https://github.com/tseemann/snp-dists/)
 
-=======
-In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/), [psutil 5.9.1](https://github.com/giampaolo/psutil), [scikit-learn 1.1.1](https://scikit-learn.org)and [snp-dists 0.8.2](https://github.com/tseemann/snp-dists).
->>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
+
 Install the latest released version from conda:
 
         conda create -c bioconda -c conda-forge -n cladeomatic cladeomatic
@@ -46,14 +43,7 @@ Install using pip:
 
 Install the latest master branch version directly from Github:
 
-<<<<<<< HEAD
         conda install jellyfish snp-dists
-=======
-        conda install jellyfish=2.30
-        conda install psutil=5.9.1
-        conda install scikit-learn=1.1.1
-        conda install snp-dist=0.8.2
->>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
         pip install git+https://github.com/phac-nml/cladeomatic.git
 
 
