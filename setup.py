@@ -57,6 +57,7 @@ setup(
         'plotly>=5.14.1',
         'ete3==3.1.2',
         'jellyfish',
+<<<<<<< HEAD
         'DendroPy==4.5.2',
         'PyQt5==5.15.9',
         'ray>=2.3.1',
@@ -65,6 +66,13 @@ setup(
         'scikit-learn>=1.1.1',
         'scipy>=1.10.1',
         'pyahocorasick>=1.4.4',
+=======
+        'DendroPy',
+        'pyahocorasick',
+        'PyQt5',
+        'ray',
+        'deprecated',
+>>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
 
     ],
 

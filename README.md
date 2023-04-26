@@ -28,10 +28,14 @@ Clade-o-matic is a phylogenetic approach for identification of hierarchal genoty
 
 Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/requirements.txt) file, should be automatically installed when using conda or pip)
 
+<<<<<<< HEAD
 In addition to the python dependencies, Clade-o-Matic requires:
 [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
 [snp-dists 0.8.2](https://github.com/tseemann/snp-dists/)
 
+=======
+In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/), [psutil 5.9.1](https://github.com/giampaolo/psutil), [scikit-learn 1.1.1](https://scikit-learn.org)and [snp-dists 0.8.2](https://github.com/tseemann/snp-dists).
+>>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
 Install the latest released version from conda:
 
         conda create -c bioconda -c conda-forge -n cladeomatic cladeomatic
@@ -42,7 +46,14 @@ Install using pip:
 
 Install the latest master branch version directly from Github:
 
+<<<<<<< HEAD
         conda install jellyfish snp-dists
+=======
+        conda install jellyfish=2.30
+        conda install psutil=5.9.1
+        conda install scikit-learn=1.1.1
+        conda install snp-dist=0.8.2
+>>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
         pip install git+https://github.com/phac-nml/cladeomatic.git
 
 
@@ -62,10 +73,12 @@ If you run ``cladeomatic``, you should see the following usage statement:
 
     Available commands:
 
-    create  Define lineages and create a kmer scheme
-    benchmark  Benchmark a kmer scheme
-    test     Test parsityper functionality on a small dataset [ not implemented]
-    version  Print version and exit
+    create     Identify population structure and develop typing scheme
+    genotype   Call genotypes from a VCF and a scheme file
+    benchmark  Test developed scheme using labeled samples and scheme*
+    namer      Rename genotypes within a scheme*
+    
+    *Coming soon
 
 Quick start
 =====
@@ -79,9 +92,8 @@ Input requirements are:
 * VCF (Must use the same reference sequence as above)
 * Name of Reference (Outgroup) sequence (Must be the same as the reference sequence)
 * Metadata file<br />
-  
 
-    cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
 Option 2 - Predefined groups <br />
 This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements.
@@ -105,15 +117,15 @@ Input requirements are:
 * Reference sequence (.fasta / .gbk)
 * Name of outgroup sequence
 * Metadata file<br />
-  
 
-    cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
+``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
   
 
 **Outputs:**
 
 ```
 OutputFolderName
+<<<<<<< HEAD
 ├── {prefix}-params.log - Selected parameters for the run
 ├── {prefix}-clades.info.txt - Information on each individual clade, including supporting SNPs and metadata associations
 ├── {prefix}-extracted.kmers.txt - Raw kmer output of extracted kmers with positions mapped
@@ -134,6 +146,30 @@ OutputFolderName
 
 **Genotype:**
 Genotype samples using the developed scheme based on a VCF file with the same reference selected to build the scheme
+=======
+├── {prefix}-altseq.fasta
+├── {prefix}-biohansel.fasta
+├── {prefix}-biohansel.meta.txt
+├── {prefix}-clades.info.txt
+├── {prefix}-dist.mat.txt
+├── {prefix}-extracted.kmers.txt
+├── {prefix}-filtered.vcf
+├── {prefix}-genotypes.distance.txt
+├── {prefix}-genotypes.raw.txt
+├── {prefix}-genotypes.selected.txt
+├── {prefix}-genotypes.supported.txt
+├── {prefix}-kmer.scheme.txt
+├── {prefix}-params.log
+├── {prefix}-sample.distances.html
+├── {prefix}-snps.scheme.txt
+├── {prefix}-snps.info.txt
+├── pseudo.seqs.fasta
+└──
+```
+<!--
+**Benchmark Scheme:**
+Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
+>>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
 Input requirements are: 
 * VCF
 * Clade-O-Matic Scheme
@@ -176,14 +212,14 @@ OutputFolderName
 ├── {prefix}-scheme.scores.txt
 └── {prefix}-scheme.calls.txt
 ```
-
+-->
 ## FAQ
 
 ## Citation
 
 ## Legal
 
-Copyright Government of Canada 2022
+Copyright Government of Canada 2023
 
 Written by: National Microbiology Laboratory, Public Health Agency of Canada
 

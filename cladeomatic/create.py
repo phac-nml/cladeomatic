@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--min_members', type=int, required=False,
                         help='Minimum number of members for a clade to be valid', default=1)
     parser.add_argument('--min_snp_count', type=int, required=False,
-                        help='Minimum number of unique snps for a clade to be valid',
+                        help='Minimum number of unique SNPs for a clade to be valid',
                         default=1)
     parser.add_argument('--max_snp_count', type=int, required=False,
                         help='Maximum number of SNPs to be selected for defining each genotype to prevent large numbers of redundant SNPs',
@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument('--min_perc', type=float, required=False,
                         help='Minimum percentage of clade members to be positive for a kmer to be valid', default=0.1)
     parser.add_argument('--max_site_ambig', type=float, required=False,
-                        help='Maximum percentage of input sequences which can be mising a site for it to still be valid', default=0.25)
+                        help='Maximum percentage of input sequences which can be missing a site for it to still be valid', default=0.25)
     parser.add_argument('--max_states', type=int, required=False,
                         help='Maximum number of states for a position [A,T,C,G,N,-]',
                         default=6)
@@ -85,8 +85,8 @@ def parse_args():
     parser.add_argument('--keep_tmp', required=False, help='Keep interim files', action='store_true')
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
     parser.add_argument('--resume', required=False, help='Resume previous analysis', action='store_true')
-    parser.add_argument('--no_compression', required=False, help='Skip compression of tree heirarchy', action='store_true')
-    parser.add_argument('--force', required=False, help='Force overwite of existing results directory',
+    parser.add_argument('--no_compression', required=False, help='Skip compression of tree hierarchy', action='store_true')
+    parser.add_argument('--force', required=False, help='Force overwrite of existing results directory',
                         action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
