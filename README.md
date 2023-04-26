@@ -1,12 +1,8 @@
-|logo|
+[![PyPI](https://img.shields.io/badge/Install%20with-PyPI-blue)](https://pypi.org/project/cladeomatic/#description)
+[![Bioconda](https://img.shields.io/badge/Install%20with-bioconda-green)](https://anaconda.org/bioconda/cladeomatic)
+[![Conda](https://img.shields.io/conda/dn/bioconda/cladeomatic?color=green)](https://anaconda.org/bioconda/cladeomatic)
+[![License: Apache-2.0](https://img.shields.io/github/license/phac-nml/cladeomatic)](https://www.apache.org/licenses/LICENSE-2.0)
 
-|conda| |nbsp| |pypi| |nbsp|  |rtd| |nbsp| |license|
-
-
-======  ===========
-Master  |ci-master|
-Dev     |ci-dev|
-======  ===========
 
 <p align="left"><img src="logo.png" alt="Clade-o-matic" height="150" width="400"></p>
 
@@ -32,7 +28,9 @@ Clade-o-matic is a phylogenetic approach for identification of hierarchal genoty
 
 Python dependencies (defined in the [requirements](https://github.com/phac-nml/cladeomatic/blob/main/requirements.txt) file, should be automatically installed when using conda or pip)
 
-In addition to the python dependencies, Clade-o-Matic requires [Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
+In addition to the python dependencies, Clade-o-Matic requires:
+[Jellyfish 2.3.0](https://github.com/gmarcais/Jellyfish/)
+[snp-dists 0.8.2](https://github.com/tseemann/snp-dists/)
 
 Install the latest released version from conda:
 
@@ -44,7 +42,7 @@ Install using pip:
 
 Install the latest master branch version directly from Github:
 
-        conda install jellyfish
+        conda install jellyfish snp-dists
         pip install git+https://github.com/phac-nml/cladeomatic.git
 
 
@@ -77,16 +75,30 @@ Option 1 - De novo tree-based <br />
 This mode will discover clades and lineages which meet membership size and SNP requirements. 
 Input requirements are: 
 * newick formatted tree
-* VCF
-* Reference sequence (.fasta / .gbk)
-* Name of outgroup sequence
+* Reference (Outgroup) sequence (.fasta / .gbk)
+* VCF (Must use the same reference sequence as above)
+* Name of Reference (Outgroup) sequence (Must be the same as the reference sequence)
 * Metadata file<br />
   
 
     cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk
 
 Option 2 - Predefined groups <br />
-This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements. 
+This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements.
+Note every group id must be unique accross all ranks to use this feature.Cladeomatic uses this for internal representation 
+of the genotypes but they can be mapped to whatever nomenclature is desired to have as an output
+
+| sample_id     | invalid_genotype | valid_genotype |
+| ----------- | ----------- |----------- | 
+| A      | 0.1      |   0.1         |
+| B   | 0.1.1.1        |     0.2.4.7       |
+| C     | 0.1.1.2       |    0.2.4.8        |
+| D   | 0.1.1.2        |       0.2.4.8       |
+| E      | 0.2      |       0.3     |
+| F   | 0.2.1        |      0.3.5     |
+| G   | 0.2.2        |       0.3.6   |
+| H   | 0.2.2        |      0.3.6      |
+
 Input requirements are: 
 * TSV formatted group file (sample_id, genotype)
 * VCF
@@ -102,28 +114,55 @@ Input requirements are:
 
 ```
 OutputFolderName
-├── {prefix}-clade.snp.histo.html [Tree Mode Only]
-├── {prefix}-clades.info.txt
-├── {prefix}-filt.kmers.txt
-├── {prefix}-genotypes.raw.txt
-├── {prefix}-genotypes.supported.txt
-├── {prefix}-genotypes.selected.txt
-├── {prefix}-genotype.consenus.fasta
-├── {prefix}-jellyfish.counts.txt
-├── {prefix}-scheme.txt
-├── {prefix}-snps.all.txt
-├── pseudo.seqs.fasta
-├── samples.dists.matrix.csv [Tree Mode Only]
+├── {prefix}-params.log - Selected parameters for the run
+├── {prefix}-clades.info.txt - Information on each individual clade, including supporting SNPs and metadata associations
+├── {prefix}-extracted.kmers.txt - Raw kmer output of extracted kmers with positions mapped
+├── {prefix}-genotypes.raw.txt - Tree or group file without filtering
+├── {prefix}-genotypes.supported.txt - Nodes which meet the user criteria
+├── {prefix}-genotypes.selected.txt - Nodes which were selected based on the supported nodes
+├── {prefix}-sample.distances.html - Histogram of node distances
+├── {prefix}-scheme.txt - Cladeomatic kmer based scheme
+├── {prefix}-snp.scheme.txt - Cladeomatic SNP based scheme
+├── {prefix}-filtered.vcf - VCF file where invalid sites have been removed
+├── pseudo.seqs.fasta - reconstructed fasta sequences based on reference sequence and vcf
+├── {prefix}-dist.mat.txt - tab delimeted distance matrix from snp-dists
+├── {prefix}-biohansel.fasta - biohansel formatted kmer fasta file
+├── {prefix}-biohansel.meta.txt - descriptions of biohansel kmers: kmername,target_position,target_base
+├── {prefix}-genotypes.distance.txt - defined threshold {single,average,complete}-linkage clusters
 └──
 ```
 
-**Benchmark Scheme:**
-Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
+**Genotype:**
+Genotype samples using the developed scheme based on a VCF file with the same reference selected to build the scheme
 Input requirements are: 
 * VCF
 * Clade-O-Matic Scheme
-* Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
+* (Optional) Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
   
+
+    cladeomatic genotype --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
+
+VCF files will not include positions which are exclusively the reference sequence or missing and this poses an issue for calling
+genotypes based on the VCF file where missing and reference state cannot be distinguished. A work around for this issue is the inclusion 
+of a sequence which is different from the reference sequence for every position targeted by the scheme. The create module generates a sequence 
+where every position used by the scheme is flipped to be a different base from the reference. This is not an ideal solution but it will allow
+users to use the genotype module using SNIPPY-CORE with their query sequence and the "alt" sequence.
+
+
+**Outputs:**
+Outputs a file with the genotype calls for each input sample
+```
+OutputFolderName
+└──  {prefix}.txt
+```
+
+
+
+**Benchmark Scheme:**
+Benchmark the scheme based on the output of genotype tool. At this point only vcf based genotyping is supported
+Input requirements are: 
+* TXT file produced by genotype module with predicted and expected genotypes
+
 
     cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
 
