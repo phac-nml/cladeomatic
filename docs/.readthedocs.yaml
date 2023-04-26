@@ -14,11 +14,20 @@ build:
     # nodejs: "19"
     # rust: "1.64"
     # golang: "1.19"
-    system_packages: true
+
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs
+    - method: pip
+      path: cladeomatic
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
    configuration: docs/source/conf.py
+   fail_on_warning: true
 
 #create the conda env for the read the docs
 conda:
