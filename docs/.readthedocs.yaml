@@ -21,7 +21,7 @@ sphinx:
 
 #create the conda env for the read the docs
 conda:
-  environment: environment.yml
+  environment: docs/environment.yml
 
 # If using Sphinx, optionally build your docs in additional formats such as PDF
 # formats:
