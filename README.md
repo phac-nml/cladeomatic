@@ -115,7 +115,6 @@ Input requirements are:
 
 ```
 OutputFolderName
-<<<<<<< HEAD
 ├── {prefix}-params.log - Selected parameters for the run
 ├── {prefix}-clades.info.txt - Information on each individual clade, including supporting SNPs and metadata associations
 ├── {prefix}-extracted.kmers.txt - Raw kmer output of extracted kmers with positions mapped
@@ -135,8 +134,9 @@ OutputFolderName
 ```
 
 **Genotype:**
+
 Genotype samples using the developed scheme based on a VCF file with the same reference selected to build the scheme
-=======
+```
 ├── {prefix}-altseq.fasta
 ├── {prefix}-biohansel.fasta
 ├── {prefix}-biohansel.meta.txt
@@ -158,8 +158,9 @@ Genotype samples using the developed scheme based on a VCF file with the same re
 ```
 <!--
 **Benchmark Scheme:**
+
 Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
->>>>>>> fcf3bbb741681f8b5cff53167783fe1fd1da4deb
+
 Input requirements are: 
 * VCF
 * Clade-O-Matic Scheme
@@ -176,17 +177,18 @@ users to use the genotype module using SNIPPY-CORE with their query sequence and
 
 
 **Outputs:**
+
 Outputs a file with the genotype calls for each input sample
 ```
 OutputFolderName
 └──  {prefix}.txt
 ```
 
-
-
 **Benchmark Scheme:**
+
 Benchmark the scheme based on the output of genotype tool. At this point only vcf based genotyping is supported
 Input requirements are: 
+
 * TXT file produced by genotype module with predicted and expected genotypes
 
 
