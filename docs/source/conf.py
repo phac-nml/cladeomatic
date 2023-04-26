@@ -58,6 +58,6 @@ html_theme_options = {
 import mock
 
 MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
-                'networkx', 'Bio.Seq', 'seaborn', 'sklearn']
+                'networkx', 'Bio.Seq', 'seaborn', 'sklearn', 'sklearn.metrics']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
