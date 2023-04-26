@@ -83,7 +83,7 @@ Input requirements are:
 * Name of Reference (Outgroup) sequence (Must be the same as the reference sequence)
 * Metadata file<br />
 
-``cladeomatic create --in_nwk tree.nwk  --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
+``cladeomatic create --in_nwk examples/small_test/tree.nwk  --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic/ --root_name root.0 --reference examples/small_test/root.gbk``
 
 Option 2 - Predefined groups <br />
 This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements.
@@ -108,28 +108,30 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file<br />
 
-``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
+``cladeomatic create --in_groups examples/small_test/groups.tsv --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic_groups/ --root_name root.0 --reference examples/small_test/root.gbk``
   
 
 **Outputs:**
 
 ```
-OutputFolderName
-├── {prefix}-params.log - Selected parameters for the run
-├── {prefix}-clades.info.txt - Information on each individual clade, including supporting SNPs and metadata associations
-├── {prefix}-extracted.kmers.txt - Raw kmer output of extracted kmers with positions mapped
-├── {prefix}-genotypes.raw.txt - Tree or group file without filtering
-├── {prefix}-genotypes.supported.txt - Nodes which meet the user criteria
-├── {prefix}-genotypes.selected.txt - Nodes which were selected based on the supported nodes
-├── {prefix}-sample.distances.html - Histogram of node distances
-├── {prefix}-scheme.txt - Cladeomatic kmer based scheme
-├── {prefix}-snp.scheme.txt - Cladeomatic SNP based scheme
-├── {prefix}-filtered.vcf - VCF file where invalid sites have been removed
-├── pseudo.seqs.fasta - reconstructed fasta sequences based on reference sequence and vcf
-├── {prefix}-dist.mat.txt - tab delimeted distance matrix from snp-dists
-├── {prefix}-biohansel.fasta - biohansel formatted kmer fasta file
+{Output folder name}
+├── {prefix}-altseq.fasta - Artificial sequence which has a different base from the reference at every position in scheme
+├── {prefix}-biohansel.fasta  - biohansel formatted kmer fasta file
 ├── {prefix}-biohansel.meta.txt - descriptions of biohansel kmers: kmername,target_position,target_base
-├── {prefix}-genotypes.distance.txt - defined threshold {single,average,complete}-linkage clusters
+├── {prefix}-clades.info.txt - Information on each individual clade, including supporting SNPs and metadata associations
+├── {prefix}-dist.mat.txt - tab delimeted distance matrix from snp-dists
+├── {prefix}-extracted.kmers.txt - Raw kmer output of extracted kmers with positions mapped
+├── {prefix}-filtered.vcf - VCF file where invalid sites have been removed
+├── {prefix}-genotypes.distance.txt - Histogram of node distances
+├── {prefix}-genotypes.raw.txt - Tree or group file without filtering
+├── {prefix}-genotypes.selected.txt - Nodes which meet the user criteria
+├── {prefix}-genotypes.supported.txt - Nodes which were selected based on the supported nodes
+├── {prefix}-kmer.scheme.txt - Cladeomatic kmer based scheme
+├── {prefix}-params.log - Selected parameters for the run
+├── {prefix}-sample.distances.html - Histogram of node distances
+├── {prefix}-snps.scheme.txt - Cladeomatic SNP based scheme
+├── {prefix}-snps.info.txt
+├── pseudo.seqs.fasta - reconstructed fasta sequences based on reference sequence and vcf
 └──
 ```
 
@@ -156,41 +158,44 @@ Genotype samples using the developed scheme based on a VCF file with the same re
 ├── pseudo.seqs.fasta
 └──
 ```
-<!--
+
 **Benchmark Scheme:**
 
 Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
 
 Input requirements are: 
+=======
+Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
+
 * VCF
-* Clade-O-Matic Scheme
-* (Optional) Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
+* Clade-O-Matic Scheme (kmer or SNP)
+* (Optional) Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt or user supplied
   
 
-    cladeomatic genotype --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
+    cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-kmer.scheme.txt --sample_meta  examples/small_test/sample.meta.txt --outfile results.tsv
 
 VCF files will not include positions which are exclusively the reference sequence or missing and this poses an issue for calling
 genotypes based on the VCF file where missing and reference state cannot be distinguished. A work around for this issue is the inclusion 
-of a sequence which is different from the reference sequence for every position targeted by the scheme. The create module generates a sequence 
+of a sequence which is different from the reference sequence for every position targeted by the scheme provided by create called "{prefix}-altseq.fasta". The create module generates a sequence 
 where every position used by the scheme is flipped to be a different base from the reference. This is not an ideal solution but it will allow
 users to use the genotype module using SNIPPY-CORE with their query sequence and the "alt" sequence.
 
 
+Additionally, there is support for the inclusion of metadata based on individual genotype calls which can include any additional information that
+the user wants provided by supplying the "--genotype_meta" parameter and information regarding each genotype that you would like included in the report.
+This can include potential sources, or characteristics of that genotype.
+
 **Outputs:**
 
 Outputs a file with the genotype calls for each input sample
-```
-OutputFolderName
-└──  {prefix}.txt
-```
+
 
 **Benchmark Scheme:**
-
+(Currently non-functional due to significant changes into behaviour)
 Benchmark the scheme based on the output of genotype tool. At this point only vcf based genotyping is supported
 Input requirements are: 
 
 * TXT file produced by genotype module with predicted and expected genotypes
-
 
     cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
 
@@ -204,7 +209,7 @@ OutputFolderName
 ├── {prefix}-scheme.scores.txt
 └── {prefix}-scheme.calls.txt
 ```
--->
+
 ## FAQ
 
 ## Citation
