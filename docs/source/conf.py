@@ -59,6 +59,6 @@ import mock
 
 MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
                 'networkx', 'Bio.Seq', 'seaborn', 'sklearn', 'sklearn.metrics', 'scipy.cluster',
-                'ahocorasick', 'dendropy', 'plotly', 'scipy.signal', 'ete3', 'plotly.express', 'itertools']
+                'ahocorasick', 'dendropy', 'plotly', 'scipy.signal', 'ete3', 'plotly.express']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
