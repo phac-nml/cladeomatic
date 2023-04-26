@@ -65,7 +65,7 @@ If you run ``cladeomatic``, you should see the following usage statement:
 
     create     Identify population structure and develop typing scheme
     genotype   Call genotypes from a VCF and a scheme file
-    benchmark  Test developed scheme using labeled samples and scheme*
+    benchmark  Test developed scheme using labeled samples and scheme
     namer      Rename genotypes within a scheme*
     
     *Coming soon
@@ -83,7 +83,8 @@ Input requirements are:
 * Name of Reference (Outgroup) sequence (Must be the same as the reference sequence)
 * Metadata file<br />
 
-``cladeomatic create --in_nwk examples/small_test/tree.nwk  --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic/ --root_name root.0 --reference examples/small_test/root.gbk``
+
+        cladeomatic create --in_nwk examples/small_test/tree.nwk  --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic/ --root_name root.0 --reference examples/small_test/root.gbk``
 
 Option 2 - Predefined groups <br />
 This mode will attempt to define a scheme based on a group manifest which meet membership size and SNP requirements.
@@ -108,7 +109,8 @@ Input requirements are:
 * Name of outgroup sequence
 * Metadata file<br />
 
-``cladeomatic create --in_groups examples/small_test/groups.tsv --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic_groups/ --root_name root.0 --reference examples/small_test/root.gbk``
+
+        cladeomatic create --in_groups examples/small_test/groups.tsv --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic_groups/ --root_name root.0 --reference examples/small_test/root.gbk``
   
 
 **Outputs:**
@@ -197,7 +199,8 @@ Input requirements are:
 
 * TXT file produced by genotype module with predicted and expected genotypes
 
-    cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
+
+        cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
 
 Evaluate the results for any conflicting genotypes
 
