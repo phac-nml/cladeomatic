@@ -64,27 +64,6 @@ GENOTYPE_REPORT_HEADER = [
     'detected_alt_mutations'
 ]
 
-SCHEME_SCORES_REPORT_HEADER = [
-    'label',
-    'scheme',
-    'analysis_date',
-    'num_submitted',
-    'num_predicted',
-    'f1_score',
-]
-
-SCHEME_SAMPLE_REPORT_HEADER = [
-    'sample_id',
-    'scheme',
-    'analysis_date',
-    'submitted_genotype',
-    'predicted_genotype',
-    'is_match',
-    'problem_feature(s)',
-]
-
-
-
 NODE_INFO_HEADER = [
         'clade_id',
         'pos',

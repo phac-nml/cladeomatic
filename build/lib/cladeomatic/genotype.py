@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument('--sample_meta', type=str, required=True, help='Tab delimited sample metadata', default=None)
     parser.add_argument('--genotype_meta', type=str, required=False, help='Tab delimited genotype metadata', default=None)
     parser.add_argument('--outfile', type=str, required=True, help='Output Directory to put results')
-    parser.add_argument('--max_missing_positions', type=int, required=False, help='Maximum number of missing positions for the genotype', default=1)
+    parser.add_argument('--max_missing_positions', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
@@ -290,6 +290,7 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         for field in sample_metadata[sample_id]:
             sample_fields.add(field)
     sample_fields = sorted(list(sample_fields))
+
     genotype_fields = set()
     for genotype in genotype_meta:
         for field in genotype_meta[genotype]:
@@ -330,11 +331,10 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         if len(genotype_results[sample_id]['predicted_genotype(s)']) == 1:
             row['predicted_genotype'] = genotype_results[sample_id]['predicted_genotype(s)'][0]
             row['predicted_genotype_distance'] = genotype_results[sample_id]['predicted_genotype_dist'][0]
-            genotype = str(row['predicted_genotype'])
+            genotype = row['predicted_genotype']
             if genotype in genotype_meta:
                 for field_id in genotype_meta[genotype]:
                     row[field_id] = genotype_meta[genotype][field_id]
-
         elif len(genotype_results[sample_id]['predicted_genotype(s)']) > 1:
             status = 'Warning'
             row['qc_messages'] = "Ambiguous genotype assignement, possible genotypes: {}".format(";".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']]))
@@ -381,15 +381,15 @@ def run():
         logging.error("Error file {} was not found or is empty".format(metadata_file))
         sys.exit()
     sample_metadata = parse_metadata(metadata_file)
+    sample_meta_fields = list(sample_metadata[list(sample_metadata.keys())[0]].keys())
 
     genotype_metadata = {}
     if genotype_meta_file is not None:
-        logging.info("Reading metadata file {}".format(genotype_meta_file))
         if not is_valid_file(genotype_meta_file):
             logging.error("Error file {} was not found or is empty".format(genotype_meta_file))
             sys.exit()
         logging.info("Reading metadata file {}".format(genotype_meta_file))
-        genotype_metadata = parse_metadata(genotype_meta_file,column='key')
+        genotype_metadata = parse_metadata(genotype_meta_file)
 
 
     logging.info("Reading scheme file {}".format(scheme_file))

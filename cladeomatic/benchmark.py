@@ -1,231 +1,148 @@
 import os
-import sys
-
 import ray
 from cladeomatic.version import __version__
-from cladeomatic.utils.vcfhelper import vcfReader
 from cladeomatic.utils import init_console_logger
-from cladeomatic.utils import parse_metadata
-import pandas as pd
 from argparse import (ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter)
 from sklearn.metrics import f1_score
-import time
+from cladeomatic.genotype import parse_scheme_features, get_snp_profiles
+from cladeomatic.constants import GENOTYPE_REPORT_HEADER, SCHEME_SCORES_REPORT_HEADER, SCHEME_SAMPLE_REPORT_HEADER
+from cladeomatic.utils import parse_metadata
+from datetime import datetime
 
 def parse_args():
     class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
         pass
 
     parser = ArgumentParser(
-        description="Clade-O-Matic: Genotyping scheme development v. {}".format(__version__),
+        description="Clade-O-Matic: Benchmarking Genotyping scheme development v. {}".format(__version__),
         formatter_class=CustomFormatter)
+    parser.add_argument('--in_genotype', type=str, required=True,
+                        help='Genotype report made by genotyper')
     parser.add_argument('--in_var', type=str, required=True,
                         help='Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)')
-    parser.add_argument('--in_scheme', type=str, required=True, help='Tab delimited scheme file produced by clade-o-matic',
+    parser.add_argument('--in_scheme', type=str, required=True,
+                        help='Tab delimited scheme file produced by clade-o-matic',
                         default=None)
-    parser.add_argument('--in_meta', type=str, required=True, help='Tab delimited file of genotype assignments', default=None)
+    parser.add_argument('--submitted_genotype_col', type=str, required=True, help='Name of column containing submitted genotype')
+    parser.add_argument('--predicted_genotype_col', type=str, required=True, help='Name of column containing predicted genotype')
     parser.add_argument('--outdir', type=str, required=True, help='Output Directory to put results')
-    parser.add_argument('--num_threads', type=int, required=False, help='Number of threads to use', default=1)
-    parser.add_argument('--prefix', type=str, required=False, help='Prefix for output files', default='cladeomatic')
+    parser.add_argument('--prefix', type=str, required=False, help='Output Directory to put results',default='cladeomatic')
     parser.add_argument('--debug', required=False, help='Show debug information', action='store_true')
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
 
     return parser.parse_args()
 
+def parse_genotype_report(header,file):
+    return parse_metadata(file,column=header[0])
 
-def get_snp_profiles(valid_positions, vcf_file):
-    '''
-    Accepts SNP position list and vcf file
-    :param valid_positions: list of integers
-    :param vcf_file: str path to vcf or tsv snp data
-    :return: dict of snp_data data structure
-    '''
-    vcf = vcfReader(vcf_file)
-    data = vcf.process_row()
+def convert_genotype_report(data_dict,predicted_field_name,submitted_field_name):
+    p = []
+    s = []
+    samples = []
+    for sample_id in data_dict:
+        samples.append(str(sample_id))
+        p.append(str(data_dict[sample_id][predicted_field_name]))
+        s.append(str(data_dict[sample_id][submitted_field_name]))
+    return {'sample_ids':samples,'predicted':p,'submitted':s}
 
-    samples = vcf.samples
-    profiles = {}
-    count_snps = 0
-    if data is not None:
-        count_snps += 1
-    for sample_id in samples:
-        profiles[sample_id] = {}
-    if data is None:
-        return profiles
-    while data is not None:
-        pos = int(data['POS'])
-        if not pos in valid_positions:
-            data = vcf.process_row()
+def filter_genotypes_include(labels,name):
+    p = []
+    s = []
+    samples = []
+    for i in range(0,len(labels['sample_ids'])):
+        if name in labels['predicted'][i] or name in labels['submitted'][i]:
+            samples.append(labels['sample_ids'][i])
+            p.append(labels['predicted'][i])
+            s.append(labels['submitted'][i])
+    return {'sample_ids':samples,'predicted':p,'submitted':s}
+
+def filter_genotypes_exclude(labels,name):
+    p = []
+    s = []
+    samples = []
+    for i in range(0,len(labels['sample_ids'])):
+        if name in labels['predicted'][i] or name in labels['submitted'][i]:
             continue
-        for sample_id in samples:
-            base = data[sample_id]
-            profiles[sample_id][pos] = base
-        count_snps += 1
+        samples.append(labels['sample_ids'][i])
+        p.append(labels['predicted'][i])
+        s.append(labels['submitted'][i])
+    return {'sample_ids':samples,'predicted':p,'submitted':s}
 
-        data = vcf.process_row()
+def write_scheme_scores(header,file,scheme_name,scores):
+    fh = open(file,'w')
+    fh.write("{}\n".format("\t".join(header)))
+    analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for label in scores:
+        row = {}
+        for field in header:
+            row[field] = ''
+        row['label'] = label
+        row['scheme'] = scheme_name
+        row['analysis_date'] = analysis_date
+        for field in scores[label]:
+            row[field] = scores[label][field]
+        fh.write("{}\n".format("\t".join([str(x) for x in row.values()])))
+    fh.close()
 
-    return profiles
-
-def parse_scheme_genotypes(scheme_file):
-    scheme = {}
-    df = pd.read_csv(scheme_file, sep="\t", header=0, low_memory=False)
-    variant_positions = list(df['variant_start'].unique())
-    geno_seqs = {}
-    snp_states = {}
-    for row in df.itertuples():
-        target_variant = row.target_variant
-        variant_start = int(row.variant_start)
-        positive_genotypes = row.positive_genotypes
-        if isinstance(positive_genotypes,float):
-            positive_genotypes = []
-        else:
-            positive_genotypes = positive_genotypes.split(',')
-
-        genotypes = positive_genotypes
-        for genotype in positive_genotypes:
-
-            if not genotype in scheme:
-                scheme[genotype] = {'positive':{},'partial':{},'allowed':{}}
-            if not variant_start in scheme[genotype]['positive']:
-                scheme[genotype]['positive'][variant_start] = set()
-            scheme[genotype]['positive'][variant_start].add(target_variant)
-
-        partial_genotypes = row.partial_genotypes
-
-        if not variant_start in snp_states:
-            snp_states[variant_start] = set()
-        snp_states[variant_start].add(target_variant)
-
-        if isinstance(partial_genotypes,float):
-            partial_genotypes = []
-        else:
-            partial_genotypes = partial_genotypes.split(',')
-        genotypes+= partial_genotypes
-        if len(partial_genotypes) == 0:
+def get_problem_bases(profile,rule):
+    mismatches = {}
+    for pos in profile:
+        found_base = set(profile[pos])
+        if '*' in found_base or '-' in found_base or 'N' in found_base:
             continue
-        for genotype in partial_genotypes:
-            if not genotype in scheme:
-                scheme[genotype] = {'positive':{},'partial':{},'allowed':{}}
-            if not variant_start in scheme[genotype]['partial']:
-                scheme[genotype]['partial'][variant_start] = set()
-            scheme[genotype]['partial'][variant_start].add(target_variant)
+        allowed_bases = rule['allowed'][pos]
+        if len(found_base & allowed_bases) != 1:
+            mismatches[pos] = found_base
+    return mismatches
+
+def write_updated_genotype_report(header,file,scheme_name,variants,data_dict,genotype_rules,predicted_field_name,submitted_field_name):
+    fh = open(file,'w')
+    fh.write("{}\n".format("\t".join(header)))
+    analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for sample_id in data_dict:
+        p = data_dict[sample_id][predicted_field_name]
+        s = data_dict[sample_id][submitted_field_name]
+        is_match = p == s
+        mismatches = {}
+        if not is_match:
+            mismatches = get_problem_bases(variants[sample_id],genotype_rules[s])
+        row = {}
+        for field in header:
+            row[field] = ''
+        row['sample_id'] = sample_id
+        row['scheme'] = scheme_name
+        row['analysis_date'] = analysis_date
+        row['submitted_genotype'] = s
+        row['predicted_genotype'] = p
+        row['is_match'] = is_match
+        m = []
+        for pos in mismatches:
+            m.append("{}:{}".format(pos,mismatches[pos]))
+        row['problem_feature(s)'] = ",".join(m)
+        fh.write("{}\n".format("\t".join([str(x) for x in row.values()])))
+    fh.close()
+    return
+
+def get_genotype_counts(data_dict,field_name='genotype'):
+    counts = {}
+    for sample_id in data_dict:
+        genotype = data_dict[sample_id][field_name]
+        if not genotype in counts:
+            counts[genotype] = 0
+        counts[genotype]+=1
+    return counts
 
 
-    for genotype in scheme:
-        for pos in snp_states:
-            allowed_bases = set()
-            if pos in scheme[genotype]['partial']:
-                allowed_bases = allowed_bases | set(scheme[genotype]['partial'][pos])
-            if pos in scheme[genotype]['positive']:
-                allowed_bases = allowed_bases | set(scheme[genotype]['positive'][pos])
-            if len(allowed_bases) == 0:
-                allowed_bases = snp_states[pos]
-            scheme[genotype]['allowed'][pos] = allowed_bases
-
-
-    genotypes = list(scheme.keys())
-
-    for i in range(0,len(genotypes)):
-        g1 = genotypes[i]
-        a1 = scheme[g1]['allowed']
-        for k in range(i+1,len(genotypes)):
-            g2 = genotypes[k]
-            dist = 0
-            a2 = scheme[g2]['allowed']
-            for pos in a1:
-                int1 = a1[pos] & a2[pos]
-                if len(int1) == 1:
-                    dist+=1
-            if dist == 0:
-                print("{}\t{}\t{}".format(g1,g2,dist))
-
-    return scheme
-
-@ray.remote
-def call_genotypes(genotype_rules,metadata,variants,max_dist=0):
-    result = {}
-    for sample_id in metadata:
-        if not 'genotype' in metadata[sample_id]:
-            continue
-        if not sample_id in variants:
-            continue
-        genotype = metadata[sample_id]['genotype']
-        result[sample_id] = {
-            'submitted_genotype':genotype,
-            'predicted_genotype(s)':[],
-            'predicted_genotype_dist': 1,
-            'genoytpe_results':{},
-            'genoytpe_dists': {}
-        }
-        genoytpe_results = {}
-        dists = {}
-        for genotype in genotype_rules:
-            genoytpe_results[genotype] = {'match':{},'mismatch':{}}
-            dists[genotype] = 1
-
-        for pos in variants[sample_id]:
-            found_base = set(variants[sample_id][pos])
-            if '*' in found_base  or '-' in found_base or 'N' in found_base:
-
-                continue
-
-            for genotype in genotype_rules:
-                allowed_bases = genotype_rules[genotype]['allowed'][pos]
-
-                if len(found_base & allowed_bases) == 1:
-                    genoytpe_results[genotype]['match'][pos] = found_base
-
-                else:
-                    genoytpe_results[genotype]['mismatch'][pos] = found_base
-
-
-
-        for genotype in genoytpe_results:
-            matches = len(genoytpe_results[genotype]['match'])
-            mismatches = len(genoytpe_results[genotype]['mismatch'])
-            total = matches + mismatches
-            if total > 0:
-                dists[genotype] = 1 - matches /total
-
-
-        result[sample_id]['genoytpe_dists'] =  {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
-        pdist = 1
-        for genotype in result[sample_id]['genoytpe_dists']:
-            dist =  result[sample_id]['genoytpe_dists'][genotype]
-
-            if dist <= pdist and dist <= max_dist:
-                result[sample_id]['predicted_genotype(s)'].append(genotype)
-                result[sample_id]['predicted_genotype_dist'] = dist
-                pdist = dist
-
-        num_geno = len(result[sample_id]['predicted_genotype(s)'])
-        if num_geno > 1:
-            filt = []
-            for i in range(0,num_geno):
-                is_substring = False
-                for k in range(i+1,num_geno):
-                    if "{}.".format(result[sample_id]['predicted_genotype(s)'][i]) in result[sample_id]['predicted_genotype(s)'][k]:
-                        is_substring = True
-                if not is_substring:
-                    filt.append(result[sample_id]['predicted_genotype(s)'][i])
-            result[sample_id]['predicted_genotype(s)'] = filt
-        del result[sample_id]['genoytpe_dists']
-
-        #del result[sample_id]['genoytpe_results']
-        #print("{}\t{}".format(sample_id,time.time() - stime))
-    return result
 
 def run():
     cmd_args = parse_args()
     scheme_file = cmd_args.in_scheme
     variant_file = cmd_args.in_var
-    metadata_file = cmd_args.in_meta
+    geno_file = cmd_args.in_genotype
     prefix = cmd_args.prefix
     outdir = cmd_args.outdir
-    num_threads = cmd_args.num_threads
-
-    if not ray.is_initialized():
-        ray.init(ignore_reinit_error=True, num_cpus=num_threads)
-
+    predicted_field_name = cmd_args.predicted_genotype_col
+    submitted_field_name = cmd_args.submitted_genotype_col
 
     logging = init_console_logger(3)
     logging.info("Starting analysis")
@@ -234,18 +151,13 @@ def run():
         logging.info("Creating temporary analysis directory {}".format(outdir))
         os.mkdir(outdir, 0o755)
 
-    logging.info("Reading metadata file {}".format(metadata_file))
-    metadata = parse_metadata(metadata_file)
-
-
     logging.info("Reading scheme file {}".format(scheme_file))
-    genotype_rules = parse_scheme_genotypes(scheme_file)
+    scheme_data = parse_scheme_features(scheme_file)
+    genotype_rules = scheme_data['scheme']
+
     for genotype in genotype_rules:
         if len(genotype_rules[genotype]['positive']) == 0:
             logging.warn("Genotype {} has no required kmers".format(genotype))
-    rule_id = ray.put(genotype_rules)
-    num_genotypes = len(genotype_rules)
-
 
     valid_positions = []
     for genotype in genotype_rules:
@@ -258,85 +170,36 @@ def run():
     logging.info("Reading snp data from vcf file {}".format(variant_file))
     variants = get_snp_profiles(valid_positions, variant_file)
 
-    logging.info("Calling genotypes for {} samples based on {} genotypes".format(len(metadata),num_genotypes))
-    batch_size = int(len(metadata) / num_threads)
-    ray_results = []
-    if batch_size < 1:
-        batch_size = 1
-    sub_metadata = {}
-    sub_variants = {}
-    for sample_id in metadata:
-        sub_metadata[sample_id] = metadata[sample_id]
-        sub_variants[sample_id] = variants[sample_id]
-        if len(sub_metadata) == batch_size:
-            ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
-            sub_metadata = {}
-            sub_variants = {}
-    if len(sub_metadata) > 0:
-        ray_results.append(call_genotypes.remote(rule_id, sub_metadata, sub_variants))
-        sub_metadata = {}
-        sub_variants = {}
-    results = ray.get(ray_results)
-    genoytpe_results = {}
-    for r in results:
-        for sample_id in r:
-            genoytpe_results[sample_id] = r[sample_id]
-    del(results)
-    del(ray_results)
 
+    data_dict = parse_genotype_report(GENOTYPE_REPORT_HEADER,geno_file)
+    num_samples = len(data_dict)
+    labels = convert_genotype_report(data_dict, predicted_field_name, submitted_field_name)
 
-    fh = open(os.path.join(outdir,"{}-scheme.calls.txt".format(prefix)),'w')
-    fh.write("sample_id\tsubmited_genotype\tpredicted_genotype\tis_match\n")
-    for sample_id in genoytpe_results:
-        g = genoytpe_results[sample_id]['submitted_genotype']
-        c = ",".join([str(x) for x in genoytpe_results[sample_id]['predicted_genotype(s)']])
-        m = g == c
-        fh.write("{}\t{}\t{}\t{}\n".format(sample_id, g, c,m))
+    submitted_genotype_counts = get_genotype_counts(data_dict, field_name=submitted_field_name)
+    predicted_genotype_counts = get_genotype_counts(data_dict, field_name=predicted_field_name)
 
-    logging.info("Calcualting F1 for {} samples".format(len(metadata)))
-    truth = []
-    pred = []
-    group_samples = {}
-    num_ambig = 0
-    num_correct = 0
-    for sample_id in genoytpe_results:
-        genotype = str(genoytpe_results[sample_id]['submitted_genotype'])
+    logging.info("Calcualting F1 for {} samples".format(num_samples))
+    raw_scheme_f1 = f1_score(labels['predicted'], labels['submitted'], average='micro')
+    num_predicted = num_samples - len(filter_genotypes_exclude(labels,name='')['sample_ids'])
+    results = {'overall': {'num_submitted':num_samples,'num_predicted':num_predicted,'f1_score':raw_scheme_f1}}
+    for genotype in genotype_rules:
+        tmp = filter_genotypes_include(labels, genotype)
+        results[genotype] = {    'num_submitted':0,'num_predicted':0,'f1_score':0}
+        if len(tmp['sample_ids']) == 0:
+            continue
+        results[genotype] = {'num_submitted':submitted_genotype_counts[genotype],
+                             'num_predicted':predicted_genotype_counts[genotype],
+                             'f1_score': f1_score(tmp['predicted'], tmp['submitted'], average='micro')}
 
-        if genotype not in group_samples:
-            group_samples[genotype] = {'truth': [], 'pred': []}
-        pgenotypes = genoytpe_results[sample_id]['predicted_genotype(s)']
+    scheme_f1_summary_file = os.path.join(outdir,"{}-scheme.scores.txt".format(prefix))
 
-        if len(pgenotypes) > 1:
-            num_ambig+=1
+    write_scheme_scores(SCHEME_SCORES_REPORT_HEADER, scheme_f1_summary_file, os.path.basename(scheme_file), results)
 
-        if len(pgenotypes) >= 1 and genotype == str(pgenotypes[0]):
-            pred.append(genotype)
-            group_samples[genotype]['pred'].append(sample_id)
-            num_correct+=1
-        else:
-            pred.append('X')
-        truth.append(genotype)
-        group_samples[genotype]['truth'].append(sample_id)
+    scheme_sample_file = os.path.join(outdir, "{}-sample.results.txt".format(prefix))
+    write_updated_genotype_report(SCHEME_SAMPLE_REPORT_HEADER, scheme_sample_file, os.path.basename(scheme_file),
+                                  variants, data_dict, genotype_rules, predicted_field_name,
+                                  submitted_field_name)
 
-    scheme_f1 = f1_score(truth,pred,average='micro')
-    fh = open(os.path.join(outdir,"{}-scheme.scores.txt".format(prefix)),'w')
-    fh.write("genotype\tnum_true\tnum_pred\tf1\n")
-    fh.write("overall\t{}\t{}\t{}\n".format(len(metadata),num_correct,scheme_f1))
-    for genotype in group_samples:
-        num_true = len(group_samples[genotype]['truth'])
-        samples = list(set(group_samples[genotype]['truth'] + group_samples[genotype]['pred']))
-        num_samples = len(samples)
-        truth = [0] * num_samples
-        pred = [0] * num_samples
-        for i in range(0,num_samples):
-            sample_id = samples[i]
-            if sample_id in group_samples[genotype]['truth']:
-                truth[i] = 1
-            if sample_id in group_samples[genotype]['pred']:
-                pred[i] = 1
-        geno_f1 = f1_score(truth, pred)
-        fh.write("{}\t{}\t{}\t{}\n".format(genotype,num_true,sum(pred),geno_f1))
-    fh.close()
 
     logging.info("Analysis complete")
 
