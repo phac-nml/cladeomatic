@@ -290,7 +290,6 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         for field in sample_metadata[sample_id]:
             sample_fields.add(field)
     sample_fields = sorted(list(sample_fields))
-
     genotype_fields = set()
     for genotype in genotype_meta:
         for field in genotype_meta[genotype]:
@@ -331,10 +330,11 @@ def write_genotype_calls(header,scheme_name,outfile,genotype_results,sample_meta
         if len(genotype_results[sample_id]['predicted_genotype(s)']) == 1:
             row['predicted_genotype'] = genotype_results[sample_id]['predicted_genotype(s)'][0]
             row['predicted_genotype_distance'] = genotype_results[sample_id]['predicted_genotype_dist'][0]
-            genotype = row['predicted_genotype']
+            genotype = str(row['predicted_genotype'])
             if genotype in genotype_meta:
                 for field_id in genotype_meta[genotype]:
                     row[field_id] = genotype_meta[genotype][field_id]
+
         elif len(genotype_results[sample_id]['predicted_genotype(s)']) > 1:
             status = 'Warning'
             row['qc_messages'] = "Ambiguous genotype assignement, possible genotypes: {}".format(";".join([str(x) for x in genotype_results[sample_id]['predicted_genotype(s)']]))
@@ -385,11 +385,12 @@ def run():
 
     genotype_metadata = {}
     if genotype_meta_file is not None:
+        logging.info("Reading metadata file {}".format(genotype_meta_file))
         if not is_valid_file(genotype_meta_file):
             logging.error("Error file {} was not found or is empty".format(genotype_meta_file))
             sys.exit()
         logging.info("Reading metadata file {}".format(genotype_meta_file))
-        genotype_metadata = parse_metadata(genotype_meta_file)
+        genotype_metadata = parse_metadata(genotype_meta_file,column='key')
 
 
     logging.info("Reading scheme file {}".format(scheme_file))
