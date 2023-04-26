@@ -4,8 +4,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9
-  - snp-dists
+  - python==3.9
+  - snp-dists==0.8.2
   - numpy>=1.23.0
   - pandas>=2.0.1
   - biopython>=1.81
@@ -14,7 +14,7 @@ dependencies:
   - statistics>=1.0.3.5
   - plotly>=5.14.1
   - ete3==3.1.2
-  - jellyfish
+  - jellyfish==0.9.0
   - DendroPy==4.5.2
   - ray>=2.3.1
   - deprecated>=1.2.13
