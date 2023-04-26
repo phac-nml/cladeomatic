@@ -52,3 +52,11 @@ html_theme_options = {
     'display_version': False,
     'navigation_depth': -1,
 }
+
+########### TRICK FOUND ON SOME TUTORIAL : ADD IN THE MOCK_MODULES ANY EXTERNAL MODULE YOU'RE USING IN YOUR PACKAGE.
+
+import mock
+
+MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate']
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
