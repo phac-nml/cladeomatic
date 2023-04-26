@@ -17,12 +17,12 @@ build:
 
 python:
   install:
+    - requirements: docs/requirements.txt
     - method: pip
       path: .
       extra_requirements:
         - docs
-    - method: pip
-      path: cladeomatic
+  system_packages: true
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
