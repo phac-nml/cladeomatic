@@ -139,79 +139,47 @@ Input requirements are:
 ```
 
 **Genotype:**
-
 Genotype samples using the developed scheme based on a VCF file with the same reference selected to build the scheme
-```
-├── {prefix}-altseq.fasta
-├── {prefix}-biohansel.fasta
-├── {prefix}-biohansel.meta.txt
-├── {prefix}-clades.info.txt
-├── {prefix}-dist.mat.txt
-├── {prefix}-extracted.kmers.txt
-├── {prefix}-filtered.vcf
-├── {prefix}-genotypes.distance.txt
-├── {prefix}-genotypes.raw.txt
-├── {prefix}-genotypes.selected.txt
-├── {prefix}-genotypes.supported.txt
-├── {prefix}-kmer.scheme.txt
-├── {prefix}-params.log
-├── {prefix}-sample.distances.html
-├── {prefix}-snps.scheme.txt
-├── {prefix}-snps.info.txt
-├── pseudo.seqs.fasta
-└──
-```
-
-**Benchmark Scheme:**
-
-Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
-
 Input requirements are: 
-=======
-Benchmark the scheme using the original input VCF file and the set of genomes used to construct the scheme.
-
 * VCF
-* Clade-O-Matic Scheme (kmer or SNP)
-* (Optional) Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt or user supplied
-  
+* Clade-O-Matic Scheme
+* Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
+* (Optional) Metadata file (sample_id,genotype) * Produced by "create" {prefix}-genotypes.selected.txt
 
-    cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-kmer.scheme.txt --sample_meta  examples/small_test/sample.meta.txt --outfile results.tsv
+
+    cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-snp.scheme.txt --sample_meta examples/small_test/sample.meta.txt --genotype_meta examples/small_test/genotype.meta.txt --outfile genotype.calls.txt
 
 VCF files will not include positions which are exclusively the reference sequence or missing and this poses an issue for calling
 genotypes based on the VCF file where missing and reference state cannot be distinguished. A work around for this issue is the inclusion 
-of a sequence which is different from the reference sequence for every position targeted by the scheme provided by create called "{prefix}-altseq.fasta". The create module generates a sequence 
+of a sequence which is different from the reference sequence for every position targeted by the scheme. The create module generates a sequence 
 where every position used by the scheme is flipped to be a different base from the reference. This is not an ideal solution but it will allow
 users to use the genotype module using SNIPPY-CORE with their query sequence and the "alt" sequence.
 
 
-Additionally, there is support for the inclusion of metadata based on individual genotype calls which can include any additional information that
-the user wants provided by supplying the "--genotype_meta" parameter and information regarding each genotype that you would like included in the report.
-This can include potential sources, or characteristics of that genotype.
-
 **Outputs:**
-
 Outputs a file with the genotype calls for each input sample
 
 
 **Benchmark Scheme:**
-(Currently non-functional due to significant changes into behaviour)
 Benchmark the scheme based on the output of genotype tool. At this point only vcf based genotyping is supported
 Input requirements are: 
+* TXT file produced by genotype module with predicted and expected genotypes, or tsv with predicted and submitted genotype information
+* Clade-O-Matic scheme file used to call genotypes
+* VCF
+* Name of column for predicted genotype
+* Name of column for submitted genotype
 
-* TXT file produced by genotype module with predicted and expected genotypes
+    cladeomatic benchmark --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-kmer.scheme.txt --in_genotype examples/small_test/genotype.calls.txt --submitted_genotype_col genotype --predicted_genotype_col predicted_genotype  --outdir benchmark
 
-
-        cladeomatic benchmark --in_var variants.vcf --in_scheme cladeomatic-scheme.txt --in_meta metadata.txt --outdir benchmark/ 
-
-Evaluate the results for any conflicting genotypes
-
+The benchmark tool will identify the F1 scores for calling genotypes based on the provided scheme and will report per sample any sites which are responsible for 
+the submitted genotype not being called
 
 **Outputs:**
 
 ```
 OutputFolderName
 ├── {prefix}-scheme.scores.txt
-└── {prefix}-scheme.calls.txt
+└── {prefix}-sample.results.txt
 ```
 
 ## FAQ
