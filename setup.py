@@ -2,7 +2,7 @@
 import os
 from distutils.core import setup
 from setuptools import find_packages
-
+from cladeomatic.version import __version__
 author = 'James Robertson'
 
 classifiers = """
@@ -29,8 +29,8 @@ exec(open('cladeomatic/version.py').read())
 setup(
     name='cladeomatic',
     include_package_data=True,
-    version='0.0.1',
-    python_requires='>=3.8.0,<4',
+    version=__version__,
+    python_requires='>=3.9.0,<4',
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     packages=find_packages(exclude=['tests']),
@@ -48,22 +48,23 @@ setup(
     },
 
     install_requires=[
-        'numpy',
-        'pandas',
-        'biopython',
-        'scipy',
-        'six',
-        'matplotlib',
-        'argparse',
-        'statistics',
-        'plotly',
-        'ete3',
+        'numpy>=1.23.0',
+        'pandas>=2.0.1',
+        'biopython>=1.81',
+        'six>=1.16.0',
+        'matplotlib>=3.7.1',
+        'statistics>=1.0.3.5',
+        'plotly>=5.14.1',
+        'ete3==3.1.2',
         'jellyfish',
-        'DendroPy',
-        'pyahocorasick',
-        'PyQt5',
-        'ray',
-        'deprecated'
+        'DendroPy==4.5.2',
+        'PyQt5==5.15.9',
+        'ray>=2.3.1',
+        'deprecated>=1.2.13',
+        'psutil==5.9.1',
+        'scikit-learn>=1.1.1',
+        'scipy>=1.10.1',
+        'pyahocorasick>=1.4.4',
 
     ],
 
