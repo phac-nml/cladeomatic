@@ -22,7 +22,6 @@ Check out the :doc:`start` section for the Quick Start guide, including how to
    usage
    legal
    api
-   :maxdepth: 3
    :hidden:
 
 Indices and tables

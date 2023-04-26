@@ -29,11 +29,16 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
+#To install sphinx: pip install sphinx
+#To install the read the docs theme: pip install sphinx-rtd-theme
+
+html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 html_logo = '_static/logo.png'
 html_title = "Clade-o-matic"
 globaltoc_includehidden = True
+toc_object_entries_show_parents = 'all'
+add_module_names = True
 html_sidebars = {
     '**': [
         'globaltoc.html',
@@ -45,4 +50,5 @@ html_sidebars = {
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
+    'navigation_depth': -1,
 }
