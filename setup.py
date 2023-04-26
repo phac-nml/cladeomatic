@@ -63,7 +63,7 @@ setup(
         'pyahocorasick',
         'PyQt5',
         'ray',
-        'deprecated'
+        'deprecated',
 
     ],
 
