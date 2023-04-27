@@ -67,10 +67,8 @@ If you run ``cladeomatic``, you should see the following usage statement:
     create     Identify population structure and develop typing scheme
     genotype   Call genotypes from a VCF and a scheme file
     benchmark  Test developed scheme using labeled samples and scheme
-    namer      Rename genotypes within a scheme*
+    namer      Rename genotypes within a scheme
     
-    *Coming soon
-
 Quick start
 =====
 **Create scheme:**
