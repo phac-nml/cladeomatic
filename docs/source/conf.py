@@ -53,6 +53,10 @@ html_theme_options = {
     'navigation_depth': -1,
 }
 
+html_css_files = [
+    '_static/custom.css',
+]
+
 #This is a hack to get around the read the docs virtual environment
 #Cannot take credit, found in an old forum thread.
 #
