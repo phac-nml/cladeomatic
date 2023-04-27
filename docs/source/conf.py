@@ -54,7 +54,7 @@ html_theme_options = {
 }
 
 html_css_files = [
-    '_static/custom.css',
+    'custom.css',
 ]
 
 #This is a hack to get around the read the docs virtual environment
