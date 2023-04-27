@@ -64,6 +64,7 @@ setup(
         'scikit-learn>=1.1.1',
         'scipy>=1.10.1',
         'pyahocorasick>=1.4.4',
+        'PyQt5'
 
     ],
 
