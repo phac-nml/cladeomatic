@@ -1,0 +1,9 @@
+key	host	location
+0		Europe
+0.2		North America
+0.4	chicken	Europe
+0.6	cow	North America
+0.6.8	cow	North America
+0.6.12.14.15	cow	North America
+0.6.12.13	cow	North America
+0.6.12.14	cow	North America

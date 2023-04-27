@@ -1,0 +1,10 @@
+label	scheme	analysis_date	num_submitted	num_predicted	f1_score
+overall	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	18	18	1.0
+0	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	1	1	1.0
+0.2	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	2	2	1.0
+0.6	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	4	4	1.0
+0.6.12.13	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	2	2	1.0
+0.6.12.14	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	1	1	1.0
+0.6.12.14.15	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	3	3	1.0
+0.6.8	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	2	2	1.0
+0.4	cladeomatic-snp.scheme.txt	2023-04-26 15:55:43	3	3	1.0
