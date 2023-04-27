@@ -33,11 +33,10 @@ Group data basic usage, ensure the ``--in_groups`` option is selected:
 
 ``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
 
-**Create Scheme Options**
 
-.. csv-table::
+.. csv-table:: **Create Scheme Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
-   :widths: 18, 7, 30, 10, 10
+   :widths: 30, 10, 40, 10, 10
 
     "\--in_var", True, "Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)", String
     "\--in_nwk", False, "Newick Tree of strains", String
@@ -74,11 +73,9 @@ Basic usage options:
 
 ``cladeomatic genotype --in-var variants.vcf --in_scheme scheme.txt --sample_meta metadata.txt --outfile genotypes/``
 
-**Genotyping Options**
-
-.. csv-table::
+.. csv-table:: **Genotyping Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
-   :widths: 20, 7, 30, 10, 5
+   :widths: 30, 10, 40, 10, 10
 
     "\--in_var", True, "Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)", String
     "\--in_scheme", True, "Tab delimited scheme file produced by clade-o-matic", String
@@ -96,11 +93,10 @@ Basic usage options:
 
 ``cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-snp.scheme.txt --sample_meta examples/small_test/sample.meta.txt --genotype_meta examples/small_test/genotype.meta.txt --outfile genotype.calls.txt``
 
-**Benchmarking Options**
 
-.. csv-table::
+.. csv-table:: **Benchmarking Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
-   :widths: 23, 7, 30, 5, 9
+   :widths: 30, 10, 40, 10, 10
 
     "\--in_genotype", True, "Genotype report made by genotyper", String
     "\--in_var", True, "Either Variant Call SNP data (.vcf) or TSV SNP data (.txt)", String
@@ -120,7 +116,7 @@ Basic usage options:
 
 .. csv-table:: **Namer Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
-   :widths: 18, 7, 30, 10, 10
+   :widths: 30, 10, 40, 10, 10
 
     "\--in_scheme", True, "Cladeomatic scheme file", String
     "\--in_name", True, "Tab delimited file of (node, name)", String
