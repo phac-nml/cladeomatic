@@ -137,6 +137,7 @@ Input requirements are:
 ```
 
 **Genotype:**
+
 Genotype samples using the developed scheme based on a VCF file with the same reference selected to build the scheme
 Input requirements are: 
 * VCF
@@ -155,10 +156,12 @@ users to use the genotype module using SNIPPY-CORE with their query sequence and
 
 
 **Outputs:**
+
 Outputs a file with the genotype calls for each input sample
 
 
 **Benchmark Scheme:**
+
 Benchmark the scheme based on the output of genotype tool. At this point only vcf based genotyping is supported
 Input requirements are: 
 * TXT file produced by genotype module with predicted and expected genotypes, or tsv with predicted and submitted genotype information
@@ -166,6 +169,7 @@ Input requirements are:
 * VCF
 * Name of column for predicted genotype
 * Name of column for submitted genotype
+
 
     cladeomatic benchmark --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-kmer.scheme.txt --in_genotype examples/small_test/genotype.calls.txt --submitted_genotype_col genotype --predicted_genotype_col predicted_genotype  --outdir benchmark
 

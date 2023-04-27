@@ -20,13 +20,7 @@ Check out the :doc:`start` section for the Quick Start guide, including how to
    self
    start
    usage
-   legal
    api
+   legal
+   indices
    :hidden:
-
-Indices and tables
-------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
