@@ -983,8 +983,8 @@ def run():
     files, label the nodes, create the distance matrix for the identified SNPs, filter
     for the relevant SNPs in the VCF, find the relevant kmers within the sequences
     submitted, determine the SNP scheme with and without kmers, and finally output
-    all the files as per the documentation (please refer to :ref:`quickstart` for details on
-    all output files).
+    all the files as per the documentation.  Please refer to :ref:`quickstart` for details on
+    all output files.
     """
 
     cmd_args = parse_args()
