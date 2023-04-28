@@ -20,7 +20,7 @@ ordered_tasks = [
 
 def print_usage_and_exit():
     """
-    This method prints brief usage instructions of Clade-O-Matic to the command line
+    This method prints brief usage instructions of Clade-o-matic to the command line
     """
     print('Usage: cladeomatic <command> [options] <required arguments>', file=sys.stderr)
     print('\nTo get minimal usage for a command use:\ncladeomatic command', file=sys.stderr)
