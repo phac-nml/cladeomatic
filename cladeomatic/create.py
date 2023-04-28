@@ -24,23 +24,31 @@ from cladeomatic.writers import write_snp_report, write_genotypes, write_node_re
 from cladeomatic.constants import MIN_FILE_SIZE
 
 def parse_args():
-    """
-    A function to parse the command line arguments passed at initialization,
-    format the arguments and return help prompts to the shell when
-    needed
-    :return: An ArgumentParser object - the arguments required, the usage
-    help prompts and the correct formatting for the incoming argument (str, int, etc.)
+    """ Arugment Parsing method.
+
+    A function to parse the command line arguments passed at initilization of Clade-o-matic,
+    format these arguments,  and return help prompts to the user shell when specified.
+
+    Returns
+    -------
+    ArgumentParser object
+        The arguments and their user specifications, the usage help prompts and the correct formatting
+        for the incoming argument (str, int, etc.)
     """
 
     class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
         """
         Class to instantiate the formatter classes required for the argument parser.
         Required for the correct formatting of the default parser values
-        :param ArgumentDefaultsHelpFormatter object - ensures the default values for the ArgumentParser
-        show up for the command line arguments
-        :param RawDescriptionHelpFormatter object - ensures the correct display of the default values
-        for the ArgumentParser
+
+        Parameters
+        ----------
+        ArgumentDefaultsHelpFormatter object
+            Instatiates the default values for the ArgumentParser for display on the command line.
+        RawDescriptionHelpFormatter object
+            Ensures the correct display of the default values for the ArgumentParser
         """
+
         pass
     #creation of the ArgumentParser object
     parser = ArgumentParser(
@@ -93,12 +101,19 @@ def parse_args():
     return parser.parse_args()
 
 def validate_file(file):
-    """
-    A method to determine if the file is valid.  Return true if
+    """ File validation method.
+    A method to determine if the file path leads to a valid file.  Return true if
     the file exists and is not empty.
-    :param file: String - path to the file
-    :return: boolean - True if the file exists and is not empty,
-    False otherwise
+
+    Parameters
+    ----------
+    file : str
+        The path to the file
+
+    Returns
+    -------
+    bool
+        True if the file exists and is not empty, False otherwise
     """
 
     if os.path.isfile(file) and os.path.getsize(file) > 32:
@@ -109,9 +124,18 @@ def validate_file(file):
 def isint(str):
     """
     A function to determine if a string can be cast to an integer
-    :param str: String - the string to be tested
-    :return: boolean - True if the string can be cast to an integer
+
+    Parameters
+    ----------
+    str: str
+        The string to be tested for integer casting
+
+    Returns
+    -------
+    bool
+        True if the string can be cast to an integer, False if not
     """
+
     try:
         int(str)
         return True
@@ -120,10 +144,24 @@ def isint(str):
 
 def get_tree_genotypes(tree):
     """
-    Accepts a ETE3 tree object and returns the heirarchical node ids for every leaf
-    :param ETE3 tree object - the tree to be processed
-    :return: dictionary  - the leaf names and node heirarchy
+    This method accepts an ETE3 tree object and returns the
+    heirarchical node ids for every leaf.
+
+    Parameters
+    ----------
+    tree : ETE3 tree object
+        The tree to be processed for its genotypes
+
+    Returns
+    -------
+    dict
+        A dictionary of the leaf names and node heirarchy - [node id, list(member ids)]
+
+    Notes
+    -----
+    Refer to http://etetoolkit.org for more thorough ETE3 documentation
     """
+
     samples = tree.get_leaf_names()
     geno = {}
     for sample_id in samples:
@@ -142,14 +180,23 @@ def get_tree_genotypes(tree):
 def parse_group_file(file, delim=None):
     """
     Method to read the grouping file passed and construct an ETE3 object from
-    values of the grouping file
-    :param file: String - path to TSV file which contains two
-    columns [sample_id, genotype]
-    :param delim: char - character to split genotypes into levels, default is None
-    as it will be determined dynamically
-    :return: Dictionary - a dictionary of all of the clade memberships in the file:
-    the delimiter used, the sample map, the membership groups, the genotype list,
-    and valid tree nodes
+    values of the grouping file.
+
+    Parameters
+    ----------
+    file : str
+        The path to TSV file which contains two columns [sample_id, genotype]
+    delim : char
+        The character to split genotypes into levels, default is None as it will be determined dynamically
+
+    Returns
+    -------
+    dict
+        A dictionary of all the clade memberships in the file: The delimeter used, the sample map, the group membership, the genotypes, and valid nodes.
+
+    Notes
+    -----
+    Refer to http://etetoolkit.org for more thorough ETE3 documentation
     """
 
     df = pd.read_csv(file, sep="\t", header=0)
@@ -199,12 +246,24 @@ def parse_group_file(file, delim=None):
 
 def parse_tree_groups(ete_tree_obj, delim='.'):
     """
-    Method takes an ETE3 tree object, parses it, constructs the
-    group data and returns it in the form of an ETE3 object
-    :param ete_tree_obj: ETE3 tree object for parsing
-    :param delim: Char - the character to split genotypes into levels,
-    default is '.', note delimiter is contained in the ete3 object
-    :return: Dictionary - a dictionary of all of the clade memberships in the file
+    Method takes an ETE3 tree object, parses it, constructs the group data, and returns it in the
+    form of a dictionary.
+
+    Parameters
+    ----------
+    ete_tree_obj : ETE3 tree object
+        The ETE3 tree object for parsing
+    delim : char
+        The character to split genotypes into levels, default is '.', note delimiter is contained in the ete3 object.
+
+    Returns
+    -------
+    dict
+        A dictionary of all the clade memberships in the file. The dictionary consists the delimeter used, the sample map,the group membership, the unique genotypes, and the valid nodes.
+
+    Notes
+    -----
+    Refer to http://etetoolkit.org for more thorough ETE3 documentation
     """
     genotypes = get_tree_genotypes(ete_tree_obj)
 
@@ -240,13 +299,24 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
 def find_overlaping_gene_feature(start, end, ref_info, ref_name):
     """
     Method to find the overlapping gene features from the reference
-    sequence passed
-    :param start: int - an int for the start of the coding sequence
-    :param end: int - an int for the end of the coding sequence
-    :param ref_info: dictionary - a dictionary containing the reference sequence data
-    (sequences, features, coding regions, and their positions).
-    :param ref_name: String -  the name of the reference sequence
-    :return: dictionary - a dictionary of the gene features
+    sequence dictionary passed to the method.
+
+    Parameters
+    ----------
+    start : int
+        The start of the coding sequence
+    end : int
+        The end of the coding sequence
+    ref_info : dict
+        The dictionary object containing the reference sequence and associated data (sequences, features, coding regions, and their positions).
+    ref_name : str
+        The name for the reference sequence.  This dictionary has the gene name, sequence for the gene, the corresponding amino acid sequence, the position, and the gene length.
+
+    Returns
+    -------
+    dict
+        The dictionary for the gene features
+
     """
     cds_start = start
     cds_end = end
@@ -259,6 +329,7 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
         positions = feat['positions']
         gene_start = -1
         gene_end = -1
+
         for s, e in positions:
             if gene_start == -1:
                 gene_start = s
@@ -269,22 +340,33 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
     return None
 
 def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=11):
-    """
-    This method creates the kmer-based scheme.  The method iterates through
-    the k-mer worker object to obtain the kmer set, scheme data and rule set
-    along with the genotype list and reference features (if present) to
-    construct a scheme containing the SNP identifiers and kmer identifiers
-    for downstream use
-    :param header: String - a string for the header row of the scheme - default is
-    SCHEME_HEADER from constants
-    :param ref_features: dictionary - a dictionary for the reference features/genes
-    :param kmer_worker: kmer_worker object - the kmer_worker object that contains the kmer set,
-    scheme data, and rule set for scheme creation
-    :param sample_genotypes: dictionary - contarins the selected genotypes for the scheme
-    :param trans_table: int - the signifier for which NCBI amino acid translation table
-    you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code
-    (see https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi)
-    :return: list - a list for the formatted scheme with kmers and snps
+    """  Creates the kmer-based scheme.
+
+    This method creates the kmer-based scheme by iterating through
+    the kmer worker object to obtain the kmer set, scheme data, rule set,
+    genotype list, and reference features (if present).  This method then uses these
+    items to construct a kmer scheme containing the SNP and kmer identifiers
+    for downstream use.  Please refer to the file
+    examples/small_test/cladeomatic/cladeomatic-kmer.scheme.txt for more information.
+
+    Parameters
+    ----------
+    header : str
+        The kmer scheme header row.  The default string is the :const:`cladeomatic.constants.SNP_HEADER`.
+    ref_features : dict
+        The dictionary containing the reference features
+    kmer_worker : kmer_worker object
+        The kmer_worker object (:class:`cladeomatic.kmers.kmer_worker`) that contains the kmer set, scheme data, and rule set for kmer scheme creation (kmer_scheme_data, rule_set, int_base_kmer_lookup, get_kseq_by_index)
+    sample_genotypes : dict
+        The dictionary object that contains the selected genotype identifiers for the samples for use in the scheme
+    trans_table : int
+        The signifier for which NCBI amino acid translation table you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code.  Refer to https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi for more details
+
+    Returns
+    -------
+    list
+        The list for use for the kmer scheme containing all elements of the kmer scheme.  Refer to the sample scheme above.
+
     """
     perf_annotation = True
     ref_id = list(ref_features.keys())[0]
@@ -485,14 +567,25 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     """
     This method filters the VCF input file for invalid SNP sites, writes
     a filtered VCF file to the path specified, and returns the number of
-    SNPs removed in the process
-    :param input_vcf: String - the file path to the input VCF file
-    :param output_vcf: String - the file path to the output filtered VCF file
-    :param max_states: int - maximum number of states
-    :param max_missing: int - maximum number of missing states
-    :return: int - for the number of SNPs removed
+    SNPs removed in the process.
+
+    Parameters
+    ----------
+    input_vcf : str
+        The file path to the VCF file to be read for values
+    output_vcf : str
+        The file path to the filtered VCF file to be written
+    max_states : int
+        The maximum number of variant states allowed for this analysis
+    max_missing : int
+        The maximum number of missing variant states allowed for this analysis
+
+    Returns
+    -------
+    int
+        The number of mising SNPs removed from the variant call file.  These SNPs are removed if they violate the processing rules for the VCF file.
     """
-    #read the vcf file and return the vcf object
+    #read the vcf file and return the vcf object: NOTE files
     vcf = vcfReader(input_vcf)
     #get the data from the VCF file in the form of a dictionary
     data = vcf.process_row()
@@ -575,20 +668,32 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     return count_snps_removed
 
 def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
-    """
-    This method is similar to the create_scehme method, but does not include
-    the kmer sequences added. The method iterates through
+    """ Creates the SNP scheme for file writing
+
+    This method is similar to :meth:`create_scheme`, but it does not include
+    the kmer sequences in the SNP scheme. The method iterates through
     the genotype list from the clade object and reference features
-    (if present) to construct a scheme containing the SNP identifiers
-    and kmer identifiers for downstream use
-    :param header: String - the header for the scheme file
-    :param ref_features: Dictionary - the reference features/genes
-    :param clade_obj: CladeWorker object - the object from which to
-    retrieve the genotype list
-    :param trans_table: int - the signifier for which NCBI amino acid translation table
-    you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code
-    (see https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi)
-    :return: list - a list for the formatted scheme with snps
+    (if present) to construct a scheme containing the SNP identifiers.  Please refer to
+    the file examples/small_test/cladeomatic/cladeomatic-snp.scheme.txt for more information.
+
+    Parameters
+    ---------
+    header : str
+        The snp scheme header row.  The default string is the :const:`cladeomatic.constants.SNP_HEADER`.
+    ref_features : dict
+        The dictionary containing the reference features
+    clade_obj : clade_worker object
+        The clade_worker object (:class:`cladeomatic.clades.clade_worker`) that contains the clade data, selected genotypes, scheme data, and rule set for snp scheme creation
+    sample_genotypes : dict
+        The dictionary object that contains the selected genotype identifiers for the samples for use in the scheme
+    trans_table : int
+        The signifier for which NCBI amino acid translation table you wish to use - default is table 11 for Bacterial, Archaeal and Plant Plastid Code.  Refer to https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi for more details
+
+    Returns
+    -------
+    list
+        The list for use for the snp scheme containing all elements of the snp scheme.  Refer to the sample scheme above.
+
     """
     #retrieve the sample genotypes from the cladeworker object
     sample_genotypes = clade_obj.selected_genotypes
@@ -738,11 +843,26 @@ def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
 def format_biohansel_scheme(biohansel_kmers,clade_obj):
     """
     A method to format the passed kmers and clade object to create a BioHansel
-    compatible scheme
-    :param biohansel_kmers: list - the pre-formatted kmers list
-    :param clade_obj: cladeworker object - the clade worker object containing the data
-    required for scheme creation
-    :return: dictionary - a dictionary of the scheme in BioHansel format
+    compatible scheme elements.  Please refer to the file examples/small_test/cladeomatic/cladeomatic-biohansel.fasta
+    for the scheme fasta file and the file examples/small_test/cladeomatic/cladeomatic-biohansel.meta.txt
+    for the scheme metadata file.
+
+    Parameters
+    ----------
+    biohansel_kmers : list
+        The pre-formatted kmer list for use in the BioHansel scheme
+    clade_obj : clade_worker object
+        The clade_worker object (:class:`cladeomatic.clades.clade_worker`) that contains the clade data, selected genotypes, scheme data, and rule set for scheme creation
+
+    Returns
+    -------
+    dict
+        A dictionary containing the elements required for writing of a BioHansel formatted scheme - the fasta elements and the metadata elements.
+
+    Notes
+    -----
+    Refer to https://github.com/phac-nml/biohansel for more thorough BioHansel documentation
+
     """
     valid_nodes = clade_obj.get_valid_nodes()
     node_heirarchy = {}
@@ -775,10 +895,19 @@ def format_biohansel_scheme(biohansel_kmers,clade_obj):
 
 def write_biohansel_scheme(scheme,fasta_file):
     """
-    A method to format the passed scheme for BioHansel processsing
-    :param scheme: dictionary - the scheme data
-    :param fasta_file: String - the file to which this method writes the scheme in
-    BioHansel format
+    A method to format the passed scheme for BioHansel scheme writing.  Please refer to the file examples/small_test/cladeomatic/cladeomatic-biohansel.fasta
+    for the scheme fasta file.
+
+    Parameters
+    ----------
+    scheme : dict
+        The BioHansel scheme data for writing to the fast file
+    fasta_file : str
+        The filepath for writing the BioHansel fasta file
+
+    Notes
+    -----
+    Refer to https://github.com/phac-nml/biohansel for more thorough BioHansel documentation
     """
     fh = open(fasta_file,'w')
     for id in scheme:
@@ -788,9 +917,20 @@ def write_biohansel_scheme(scheme,fasta_file):
 def write_biohansel_meta(scheme,out_file):
     """
     Method to write the BioHansel metadata table that includes the split
-    k-mers and the actual SNPs interrogated
-    :param scheme: dictionary - the scheme data
-    :param out_file: string - the path to the BioHansel metadata file
+    kmers and the actual SNPs interrogated.  Please refer to the file examples/small_test/cladeomatic/cladeomatic-biohansel.meta.txt
+    for the scheme metadata file.
+
+    Parameters
+    ----------
+    scheme : dict
+        The dictionary of scheme data for the metadata file output
+    out_file : str
+        The filepath for writing the BioHansel metadata file
+
+    Notes
+    -----
+    Refer to https://github.com/phac-nml/biohansel for more thorough BioHansel documentation
+
     """
     fh = open(out_file,'w')
     fh.write("kmername\ttarget_pos\ttarget_base\n")
@@ -800,13 +940,22 @@ def write_biohansel_meta(scheme,out_file):
 
 def create_alt_psedo_sequence(ref_seq,positions,msa_base_counts,outfile):
     """
-    This method creates a pseudo alternate sequence for the reference seqeunce
-    with the SNP substitutions implemented and write the fasta file
-    to the path selected
-    :param ref_seq: String - the reference sequence
-    :param positions: list - list of the positions of the mutations
-    :param outfile: String - the output file path
+    This method creates a pseudo alternate sequence for the reference sequence
+    with the SNP substitutions implemented.  A resulting fasta file is written for
+    downstream use, refer to the file the file examples/small_test/cladeomatic/cladeomatic-altseq.fasta
+    for more details.
+
+    Parameters
+    ----------
+    ref_seq : str
+        The reference sequence for processing
+    positions : list
+        A list of integer positions for the variants (SNPs)
+    outfile : str
+        The file path for writing the alternate sequence
+
     """
+
     #cast the string to an iterable list
     alt_seq = list(ref_seq)
     bases = ['A','T','C','G']
@@ -832,11 +981,12 @@ def run():
     files as described in the readme.  Reads the tree or group file, reference file
     vcf file and metadata file.  Both the tree and group mode will validate the input
     files, label the nodes, create the distance matrix for the identified SNPs, filter
-    for the relevant SNPs in the VCF, find the relevant k-mers within the sequences
-    submitted, determine the SNP scheme with and without k-mers, and finally output
-    all the files as per the documentation (please refer to the readme for details on
-    output files).
+    for the relevant SNPs in the VCF, find the relevant kmers within the sequences
+    submitted, determine the SNP scheme with and without kmers, and finally output
+    all the files as per the documentation (please refer to :ref:`quickstart` for details on
+    all output files).
     """
+
     cmd_args = parse_args()
     tree_file = cmd_args.in_nwk
     group_file = cmd_args.in_groups
