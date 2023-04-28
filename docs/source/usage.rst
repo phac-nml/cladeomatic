@@ -27,11 +27,11 @@ One of the main menu options below must be selected
 
 De novo tree data basic usage, ensure the ``--in_nwk`` option is selected:
 
-``cladeomatic create --in_nwk tree.nwk --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
+``cladeomatic create --in_nwk examples/small_test/tree.nwk  --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic/ --root_name root.0 --reference examples/small_test/root.gbk``
 
 Group data basic usage, ensure the ``--in_groups`` option is selected:
 
-``cladeomatic create --in_groups groups.tsv --in_var variants.vcf --in_meta metadata.txt --outdir scheme/ --root_name ref --reference ref.gbk``
+``cladeomatic create --in_groups examples/small_test/groups.tsv --in_var examples/small_test/snps.vcf --in_meta examples/small_test/sample.meta.txt --outdir small_test_cladeomatic_groups/ --root_name root.0 --reference examples/small_test/root.gbk``
 
 
 .. csv-table:: **Create Scheme Options**
@@ -71,7 +71,7 @@ Group data basic usage, ensure the ``--in_groups`` option is selected:
 
 Basic usage options:
 
-``cladeomatic genotype --in-var variants.vcf --in_scheme scheme.txt --sample_meta metadata.txt --outfile genotypes/``
+``cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-snp.scheme.txt --sample_meta examples/small_test/sample.meta.txt --genotype_meta examples/small_test/genotype.meta.txt --outfile genotype.calls.txt``
 
 .. csv-table:: **Genotyping Options**
    :header: "Argument", "Required", "Description", "Input type", "Default Value"
@@ -91,7 +91,7 @@ Basic usage options:
 
 Basic usage options:
 
-``cladeomatic genotype --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-snp.scheme.txt --sample_meta examples/small_test/sample.meta.txt --genotype_meta examples/small_test/genotype.meta.txt --outfile genotype.calls.txt``
+``cladeomatic benchmark --in_var examples/small_test/snps.vcf --in_scheme examples/small_test/cladeomatic-kmer.scheme.txt --in_genotype examples/small_test/genotype.calls.txt --submitted_genotype_col genotype --predicted_genotype_col predicted_genotype  --outdir benchmark``
 
 
 .. csv-table:: **Benchmarking Options**

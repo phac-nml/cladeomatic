@@ -39,6 +39,7 @@ html_title = "Clade-o-matic"
 globaltoc_includehidden = True
 toc_object_entries_show_parents = 'all'
 add_module_names = True
+
 html_sidebars = {
     '**': [
         'globaltoc.html',
@@ -57,10 +58,10 @@ html_css_files = [
     'custom.css',
 ]
 
-#This is a hack to get around the read the docs virtual environment
+#This is a hack to get around the Read the Docs virtual environment
 #Cannot take credit, found in an old forum thread.
 #
-#The read the docs virtual environment has a conflicting version of numpy: so it will not install
+#The Read the Docs virtual environment has a conflicting version of numpy: so it will not install
 #unless your version of numpy is equal or higher to read the docs, you cannot use the requirements.txt
 #for dependencies and pip installation, it will error out.
 #Additionaly, to override the automatic use of the root requirements.txt file, you need to add a blank file to
