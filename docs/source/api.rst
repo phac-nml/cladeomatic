@@ -16,6 +16,7 @@ create
 
 .. automodule:: cladeomatic.create
     :members:
+    :special-members: CustomFormatter
 
 genotype
 --------
@@ -52,6 +53,7 @@ kmers
 
 .. automodule:: cladeomatic.kmers
     :members:
+    :special-members: __init__
 
 snps
 ----

@@ -8,9 +8,11 @@ from cladeomatic.constants import IUPAC_LOOK_UP
 from deprecated import deprecated
 
 class kmer_worker:
-    """
-    The kmer_worker class that instantiates a number of class variables
-    for use in the creation of the kmer lists for further downstream processing
+    """  The kmer_worker class.
+
+    The kmer_worker class contains several class variables for
+    use in the creation of the kmer lists required for downstream processes in the
+    creation of the schemes and data analysis files.
     """
     # input
     ref_sequence = ''
@@ -44,6 +46,38 @@ class kmer_worker:
 
     def __init__(self, ref_sequence, msa_file, result_dir, prefix, klen, genotype_map, genotype_snp_rules,max_ambig=0, min_perc=1,
                  target_positions=[], num_threads=1):
+        """
+        The instantiation of the kmer_worker class.
+
+        Parameters
+        ----------
+        ref_sequence : str
+            The reference sequence for kmer selection
+        msa_file : str
+            The file path to the fasta file with the snps substitutions
+        result_dir : str
+            The file path to the results directory
+        prefix : str
+            The prefix for the clade-o-matic produced output files
+        klen : int
+            The length of the kmers
+        genotype_map : dict
+            The map of the sample identifiers and genotypes
+        genotype_snp_rules : dict
+            The dictionary groupings of the positions, base variants, positive and partial genotypes for the snps, that make up the processing rules
+        max_ambig : int
+            The maximum number of ambiguous bases that can be contained in a kmer sequence.  Default for this class is 0.
+        min_perc : float
+            The minimum percentage of clade members to be positive for a kmer to be considered valid. Default for this class is 1.
+        target_positions : list
+            The integer list of the target snp positions.  Default for this class is an empty list.
+        num_threads : int
+            The number of threads for the Ray instance.  Default for this class is 1.
+
+        Notes
+        -----
+        Refer to https://www.ray.io for more information about the Ray instances used in this module
+        """
         self.ref_sequence = ref_sequence
         self.ref_len = len(ref_sequence)
         self.max_ambig = max_ambig
