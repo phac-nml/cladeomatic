@@ -1,5 +1,12 @@
+"""
+A module that holds a number of constants for the various functions clade-o-matic
+performs in the creation of schemes and data analysis.
+"""
+
+#format for the log entries
 LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 
+#the scheme header row string
 SCHEME_HEADER = [
     'key',
     'mutation_key',
@@ -48,7 +55,6 @@ CLADE_DEFINING_SNPS_HEADER = [
     'aa_name'
     'is_silent',
 ]
-
 
 GENOTYPE_REPORT_HEADER = [
     'sample_id',
@@ -118,6 +124,7 @@ CONFIDENCE = ['strong','moderate','weak']
 
 QC_STATUS = ['PASS','FAIL','WARN']
 
+#the minimum file size to define a file as empty or not
 MIN_FILE_SIZE = 32
 
 

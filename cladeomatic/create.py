@@ -24,9 +24,9 @@ from cladeomatic.writers import write_snp_report, write_genotypes, write_node_re
 from cladeomatic.constants import MIN_FILE_SIZE
 
 def parse_args():
-    """ Arugment Parsing method.
+    """ Argument Parsing method.
 
-    A function to parse the command line arguments passed at initilization of Clade-o-matic,
+    A function to parse the command line arguments passed at initialization of Clade-o-matic,
     format these arguments,  and return help prompts to the user shell when specified.
 
     Returns
@@ -145,7 +145,7 @@ def isint(str):
 def get_tree_genotypes(tree):
     """
     This method accepts an ETE3 tree object and returns the
-    heirarchical node ids for every leaf.
+    hierarchical node ids for every leaf.
 
     Parameters
     ----------
@@ -155,7 +155,7 @@ def get_tree_genotypes(tree):
     Returns
     -------
     dict
-        A dictionary of the leaf names and node heirarchy - [node id, list(member ids)]
+        A dictionary of the leaf names and node hierarchy - [node id, list(member ids)]
 
     Notes
     -----
@@ -192,7 +192,7 @@ def parse_group_file(file, delim=None):
     Returns
     -------
     dict
-        A dictionary of all the clade memberships in the file: The delimeter used, the sample map, the group membership, the genotypes, and valid nodes.
+        A dictionary of all the clade memberships in the file: The delimiter used, the sample map, the group membership, the genotypes, and valid nodes.
 
     Notes
     -----
@@ -259,7 +259,7 @@ def parse_tree_groups(ete_tree_obj, delim='.'):
     Returns
     -------
     dict
-        A dictionary of all the clade memberships in the file. The dictionary consists the delimeter used, the sample map,the group membership, the unique genotypes, and the valid nodes.
+        A dictionary of all the clade memberships in the file. The dictionary consists the delimiter used, the sample map,the group membership, the unique genotypes, and the valid nodes.
 
     Notes
     -----
@@ -320,7 +320,7 @@ def find_overlaping_gene_feature(start, end, ref_info, ref_name):
     """
     cds_start = start
     cds_end = end
-    #if the refrence sequence name is not in the sequence dictionary
+    #if the reference sequence name is not in the sequence dictionary
     #return None - invalid
     if not ref_name in ref_info:
         return None
@@ -435,7 +435,7 @@ def create_scheme(header,ref_features,kmer_worker,sample_genotypes,trans_table=1
                         obj[field_id] = ''
                     start = kmer_info[kIndex]['aln_start']
                     end = kmer_info[kIndex]['aln_end']
-                    #if there is annotation to be included, retreive it here
+                    #if there is annotation to be included, retrieve it here
                     if perf_annotation:
                         gene_feature = find_overlaping_gene_feature(start, end, ref_features, ref_id)
                     else:
@@ -583,7 +583,7 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
     Returns
     -------
     int
-        The number of mising SNPs removed from the variant call file.  These SNPs are removed if they violate the processing rules for the VCF file.
+        The number of missing SNPs removed from the variant call file.  These SNPs are removed if they violate the processing rules for the VCF file.
     """
     #read the vcf file and return the vcf object: NOTE files
     vcf = vcfReader(input_vcf)
@@ -621,7 +621,7 @@ def filter_vcf(input_vcf,output_vcf,max_states,max_missing):
             if base not in ['A','T','C','G']:
                 base = 'N'
             base_counts[base]+=1
-        #if the ratio of bad calls to the numver of samples is
+        #if the ratio of bad calls to the number of samples is
         #greater than the max allowed missing samples
         #add them to the invalid positions dictionary
         if base_counts['N'] / num_samples > max_missing:
@@ -730,7 +730,7 @@ def create_snp_scheme(header,ref_features,clade_obj,trans_table=11):
                 bases_present.append(base)
                 if base != ref_base:
                     alt_bases.append(base)
-        #loop thorugh the alternate bases/mutations to create the scheme output
+        #loop through the alternate bases/mutations to create the scheme output
         for i in range(0, len(alt_bases)):
             alt_base = alt_bases[i]
             mutation_key = "snp_{}_{}_{}".format(ref_base, pos + 1, alt_base)
@@ -1249,7 +1249,7 @@ def run():
         dist_nomenclature[sample_id] = genotype
     write_genotypes(dist_nomenclature, os.path.join(outdir, "{}-genotypes.distance.txt".format(prefix)),header=dist_header)
 
-    #if sepcified, prune the scheme for the maximum number of snps per node
+    #if specified, prune the scheme for the maximum number of snps per node
     if max_snp_count > 1:
         cw.prune_snps()
         variant_pos = set(cw.variant_positions)

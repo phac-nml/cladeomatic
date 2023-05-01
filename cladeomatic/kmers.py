@@ -47,7 +47,7 @@ class kmer_worker:
     def __init__(self, ref_sequence, msa_file, result_dir, prefix, klen, genotype_map, genotype_snp_rules,max_ambig=0, min_perc=1,
                  target_positions=[], num_threads=1):
         """
-        The instantiation of the kmer_worker class.
+        The instantiation of the :class:`kmer_worker` class.
 
         Parameters
         ----------
@@ -288,7 +288,7 @@ class kmer_worker:
                             no_gap_len = len(kseq.replace("-", ""))
                             if kseq.count('N') <= min_ambig:
                                 min_ambig = kseq.count('N')
-                        #remove any ambiquous bases
+                        #remove any ambiguous bases
                         kseq = seq[start:end + 1].replace('-', '')
                         if kseq.count('N') > self.max_ambig or len(kseq) != klen:
                             continue
@@ -478,7 +478,7 @@ class kmer_worker:
         is only one kmer base state present for it.
         """
         kmer_rules = self.rule_set
-        #get all defined geneotypes in the snp scheme
+        #get all defined genotypes in the snp scheme
         genotypes_defined = set()
         for pos in self.genotype_snp_rules:
             for base in self.genotype_snp_rules[pos]:
@@ -626,13 +626,13 @@ class kmer_worker:
 
     @deprecated()
     def find_ovl_kmers(self):
-        variant_postions = self.target_positions
+        variant_positions = self.target_positions
         selected_kmers = self.kmer_scheme_data
-        num_var_pos = len(variant_postions)
+        num_var_pos = len(variant_positions)
         shared_kmers = set()
         pot_pos_ovl = {}
-        for i in range(0, len(variant_postions)):
-            var_pos_1 = variant_postions[i]
+        for i in range(0, len(variant_positions)):
+            var_pos_1 = variant_positions[i]
             var_kmer_indices_1 = set()
             for base in selected_kmers[var_pos_1]:
                 var_kmer_indices_1 = var_kmer_indices_1 | set(selected_kmers[var_pos_1][base])

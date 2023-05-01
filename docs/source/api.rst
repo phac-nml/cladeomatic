@@ -41,6 +41,7 @@ clades
 
 .. automodule:: cladeomatic.clades
     :members:
+    :special-members: __init__
 
 constants
 ---------
