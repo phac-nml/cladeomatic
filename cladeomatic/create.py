@@ -985,6 +985,10 @@ def run():
     submitted, determine the SNP scheme with and without kmers, and finally output
     all the files as per the documentation.  Please refer to :ref:`quickstart` for details on
     all output files.
+
+    Notes
+    -----
+    Refer to https://www.ray.io for more information about the Ray instances used in this module.
     """
 
     cmd_args = parse_args()

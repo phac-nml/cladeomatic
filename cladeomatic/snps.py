@@ -4,15 +4,32 @@ from cladeomatic.utils import fisher_exact
 
 @ray.remote
 def snp_search(group_data, vcf_file, assigned_row, offset=0):
-    '''
+    """
     Accepts SNP data and tree to identify which SNPs correspond to a specific node on the tree.
-    Note: this method is distributed the implementation of Ray
-    :param group_data: dictionary - of the snps and their clade/group membership.
-    :param ete_tree_obj: ETE3 tree object
-    :param vcf_file: str path to vcf or tsv snp data
-    :param offset: int - the amount to offset the rows, default 0
-    :return: dict of snp_data data structure
-    '''
+    Following the search with :meth:`process_snps`, the data dictionary of snps is returned with
+    group memberships and all other associated data for the snps is returned.
+
+    Parameters
+    ----------
+    group_data : dict
+        A dictionary of the snps and the clade/group membership
+    ete_tree_object : ETE3 tree object
+        The ETE3 object to traverse to associate snps to nodes
+    vcf_file : str
+        The file path to the VCF file or the TSV snp data file
+    offset : int
+        The amount to offset the rows.  Default of 0.
+
+    Returns
+    -------
+    dict
+        The dictionary of the :attr:`snp_data` data structure following the search through the available data
+    Notes
+    -----
+    Refer to https://www.ray.io for more information about the Ray instances used in this module
+    and http://etetoolkit.org for more thorough ETE3 documentation.
+
+    """
 
     #read the vcf file
     vcf = vcfReader(vcf_file)
@@ -69,12 +86,28 @@ def snp_search(group_data, vcf_file, assigned_row, offset=0):
 def snp_search_controller(group_data, vcf_file, n_threads=1):
     """
     A method to search for the lists of snps in the VCF file
-    and group data to match them for one dictionary
-    :param group_data: dictionary - of the snps and their clade/group membership
-    :param vcf_file: String - the file path to the VCF file
-    :param n_threads: int - the number of threads to use in the remote method
-    :return: dictionary - the snps as identified from the input and grouped by
-    chromosome, position and base
+    and group data to match them to create a complete snp dictionary.
+    Please refer to the file examples/small_test/cladeomatic/cladeomatic-snps.info.txt
+    for more information.
+
+    Parameters
+    ----------
+    group_data : dict
+        A dictionary of all the SNPs and their clade/group membership
+    vcf_file : str
+        The file path to the user VCF file containing the variants of interest
+    n_threads : int
+        The number of threads to use in the Ray method call
+
+    Returns
+    -------
+    dict
+        The data dictionary for the snps as identified from the input and grouped by chromosome, position and base
+
+    Notes
+    -----
+    Refer to https://www.ray.io for more information about the Ray instances used in this module.
+
     """
     offsets = range(1, n_threads + 1)
     starts = range(0, n_threads)
@@ -106,17 +139,32 @@ def snp_search_controller(group_data, vcf_file, n_threads=1):
 def process_snp(chrom, pos, base, all_samples, snp_members, ambig_members, group_membership, is_ref):
     """
     A method to process all the inputs to create a dictionary entry of SNP
-    data
-    :param chrom: string - the chromosome for the SNP
-    :param pos: int - the position of the SNP
-    :param base: string - the base change of the SNP
-    :param all_samples: set - the identifiers for the samples
-    :param snp_members: set - the identifiers for the snp nodes
-    :param ambig_members: set - a collection of the ambiguously called bases
-    :param group_membership: dictionary - the nodeIds and their clade/group members
-    :param is_ref: boolean - True, if this the reference sequence base
-    :return: dictionary - a dictionary of the snp and associated information for
-    further processing
+    data.  Please refer to the file
+    examples/small_test/cladeomatic/cladeomatic-snps.info.txt for more information.
+
+    Parameters
+    ---------
+    chrom : str
+        The chromosome to which the SNP belongs to
+    pos : int
+        The location of the SNP in the sequence
+    base : str
+        The nucleotide base of th SNP
+    all_samples : set
+        The set of identifiers for the samples
+    snp_members : set
+        The identifiers for the SNPs
+    ambig_members : set
+        The collections of ambiguously called nucleotides
+    group_membership : dict
+        The dictionary for the node ids and their clade/group memberships
+    is_ref : bool
+        True, if this the reference sequence nucleotide
+    Returns
+    _______
+    dict
+        A dictionary of the snp and associated information for further processing
+
     """
     num_members = len(snp_members)
     #create a set of all the samples without the ambiguous members

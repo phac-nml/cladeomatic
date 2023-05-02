@@ -139,7 +139,8 @@ class clade_worker:
         The workflow method calls all the helper methods of this class to process the data
         according to both the input and the flags set by the user to determine
         clade memberships, validate SNPs, and compress the resulting clade unless otherwise
-        specified by the user.
+        specified by the user.  Please refer to the file
+        examples/small_test/cladeomatic/cladeomatic-clades.info.txt for more information
         """
         self.raw_genotypes = self.generate_genotypes()
         self.snp_data = snp_search_controller(self.group_data, self.vcf_file, self.num_threads)
@@ -879,14 +880,17 @@ class clade_worker:
         and `scipy.cluster.hierarchy.fcluster <https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.fcluster.html>`_
         for more thorough documentation.
         """
+        #read the distance matrix file and extract the values
         data = pd.read_csv(self.distance_matrix_file, sep='\t', header=0, index_col=0)
         data_labels = data.columns.values
         distance_matrix = distance.squareform(data.values)
+        #create the hierarchy through the method denoted in the user specifications (default was average)
         Z = hierarchy.linkage(distance_matrix, method=self.method)
         cluster_membership = {}
         for id in data_labels:
             cluster_membership[id] = []
         clust_number = 1
+        #loop through the distance thresholds to flatten the above clustering and cluster the samples
         for dist in self.dist_thresholds:
             clusters = hierarchy.fcluster(Z, dist, criterion='distance')
             ids = set(clusters)
@@ -976,20 +980,24 @@ class clade_worker:
         """
         #order the histogram dictionary
         histo = OrderedDict(sorted(self.distance_histo.items()))
+        #retrieve the keys
         histo_keys = list(histo.keys())
         max_value = histo_keys[-1]
         x = list(range(0,max_value+2))
         y = []
+        #loop through and get the values for the keys
         for i in x:
             value = 0
             if i in histo:
                 value = histo[i]
             y.append(value)
+        #find the troughs
         troughs, properties = self.find_dist_troughs(y)
         self.dist_thresholds = sorted(list(troughs),reverse=True)
         troughs = sorted(list(set(troughs)))
         c = self.as_range(troughs)
         ranges = []
+        #set the ranges
         for idx, tuple in enumerate(c):
             ranges.append((troughs[tuple[0]], troughs[tuple[1]]))
 
@@ -1124,7 +1132,13 @@ class clade_worker:
 
     def calc_metadata_counts(self,sample_set):
         """
-        A helper method to count the metadata values in the sample set.
+        A helper method to count the metadata values in the sample set passed.
+        This method loops through the field identifiers of the
+        metadata and counts the total values for each field value.
+
+        Example: the location field has the values Europe and North America.  This
+        method will count the number of samples that correspond to Europe and North
+        America (Europe 10, North America 15).
 
         Parameters
         ----------
@@ -1134,12 +1148,15 @@ class clade_worker:
         Returns
         -------
         dict
-            A dictionary for the metadta field id, value and the value counts
+            A dictionary for the metadata field id, value and the value counts
         """
         metadata_counts = {}
+        #find the sample ids in the metadata dictionary that correspond to the sample set
         for sample_id in self.metadata_dict:
             if sample_id not in sample_set:
                 continue
+            #loop through the field identifiers in the metadata set and count
+            #the number of times the value appears
             for field_id in self.metadata_dict[sample_id]:
                 value = self.metadata_dict[sample_id][field_id]
                 if not field_id in metadata_counts:
@@ -1155,9 +1172,12 @@ class clade_worker:
         calculate the fisher's exact test for the node associations
         in the clades aleady determined.
         """
+        #retrieve the sample ids
         samples = set(self.metadata_dict.keys())
         num_samples = len(samples)
+        #count the field values in the sample metadata
         metadata_counts = self.calc_metadata_counts(samples)
+        #loop through and initialize each of the field names for the fisher exact test
         for clade_id in self.clade_data:
             for col in metadata_counts:
                 if col == 'year':
@@ -1165,7 +1185,7 @@ class clade_worker:
                 for field_name in metadata_counts[col]:
                     self.clade_data[clade_id]['fisher'][field_name] = {'oddsr': 'nan', 'p': 1}
 
-
+        #loop through the genotypes of the group member data to get the membership and metadata field counts
         for genotype in self.group_data['membership']:
             clade_id = genotype.split(self.delim)[-1]
             in_members_indexes = self.group_data['membership'][genotype]
@@ -1177,6 +1197,9 @@ class clade_worker:
             for col in in_counts:
                 if col == 'year':
                     continue
+                #construct a pseudo table with the metadata counts, the number of members
+                #and the number of samples to calculate the fisher's exact test coefficient
+                #between fields - to determine the association between them, if any
                 for field_name in in_counts[col]:
                     table  = [
                         [ 0, 0 ],
@@ -1204,31 +1227,38 @@ class clade_worker:
         larger than the pre-determined threshold, the temporal flag is set
         to 'True' in the clade data for the node.
         """
+        #find the year of the sample in the metadata if it exists
         sample_id = list(self.metadata_dict.keys())[0]
         if 'year' not in self.metadata_dict[sample_id]:
             return
 
         temporal_data = {}
+        #initialize the temporal data dictionary
         for node_id in self.clade_data:
             temporal_data[node_id] = {
                 'dist':[],
                 'year':[]
             }
-
+        #open the matrix file
         fh = open(self.distance_matrix_file, 'r')
         header = next(fh).rstrip().split("\t")
         num_columns = len(header)
         sample_list = header[1:]
+        #get the genotypes for the samples
         sample_lookup = self.genotype_lookup(sample_list)
         index = 1
+        #loop through the distance matrix rows
         for line in fh:
             line = line.rstrip().split("\t")
+            #get the sample ids and member nodes
             sample_id_1 = line[0]
             nodes_1 = set(sample_lookup[sample_id_1])
             y1 = self.metadata_dict[sample_id_1]['year']
             if y1 == 'nan' or len(y1) == 0 or y1 is None:
                 continue
             y1 = float(y1)
+            #loop through to find the distance between two samples and ensure they both have years
+            #set the temporal data with the node id as key and the distance and year value
             for i in range(index, num_columns):
                 sample_id_2 = header[i]
                 if sample_id_1 == sample_id_2:
@@ -1248,7 +1278,7 @@ class clade_worker:
                 temporal_data[node_id]['year'].append(y1)
         fh.close()
 
-
+        #loop through the temporal data created above
         for node_id in temporal_data:
             R = 0
             P = 1
@@ -1256,16 +1286,20 @@ class clade_worker:
             Ppear = 1
             num_distinct_dist = len(set(temporal_data[node_id]['dist']))
             num_distinct_year = len(set(temporal_data[node_id]['year']))
+            #calculate the spearman's and pearson's coefficients for the temporal
+            #data based on the distance and year
             if num_distinct_dist >= 3 and num_distinct_year >= 3:
                 R, P = spearmanr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
                 Rpear, Ppear = pearsonr(np.asarray(temporal_data[node_id]['year']), np.asarray(temporal_data[node_id]['dist']))
 
-
+            #set these values in the clade data for the node
             self.clade_data[node_id]['spearmanr'] = R
             self.clade_data[node_id]['spearmanr_pvalue'] = P
             self.clade_data[node_id]['pearsonr'] = Rpear
             self.clade_data[node_id]['pearsonr_pvalue'] = Ppear
             is_present = False
+            #flag if there is temporal signal in the data based on the
+            #spearman's and pearson's coefficients calculated above
             if R > self.rcor_thresh or Rpear > self.rcor_thresh:
                 is_present = True
             self.clade_data[node_id]['is_temporal_signal_present'] = is_present
