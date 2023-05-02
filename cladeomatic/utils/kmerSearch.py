@@ -31,34 +31,52 @@ NT_SUB = str.maketrans('acgtrymkswhbvdnxACGTRYMKSWHBVDNX',
                        'tgcayrkmswdvbhnxTGCAYRKMSWDVBHNX')
 
 def expand_degenerate_bases(seq):
-    """List all possible kmers for a scheme given a degenerate base
+    """
+    List all possible kmers for a scheme given a degenerate base.
 
-    Args:
-         Scheme_kmers from SNV scheme fasta file
-    Returns:
+    Parameters
+    ----------
+    seq : str
+         The string for the scheme_kmers from SNV scheme fasta file
+    Returns
+    -------
+    list
          List of all possible kmers given a degenerate base or not
     """
     return list(map("".join, product(*map(bases_dict.get, seq))))
 
 def revcomp(s):
-    """Reverse complement nucleotide sequence
+    """
+    This method creates the reverse compliment nucleotide sequence for the sequence passed
+    using the `str.translate <https://docs.python.org/3.9/library/stdtypes.html#str.translate>`_ method.
 
-    Args:
-        s (str): nucleotide sequence
+    Parameters
+    ----------
+    s : str
+        The nucleotide sequence to find the reverse compliment for
 
     Returns:
-        str: reverse complement of `s` nucleotide sequence
+    str
+        The reverse complement of the passed nucleotide sequence
     """
     return s.translate(NT_SUB)[::-1]
 
 def init_automaton_dict(seqs):
-    """Initialize Aho-Corasick Automaton with kmers from SNV scheme fasta
+    """
+    Initialize Aho-Corasick Automaton with the kmers found in the passed
+    sequence dictionary.  The Automaton takes the kmer and its reversed
+    compliment for loading.
 
-    Args:
-        scheme_fasta: SNV scheme fasta file path
+    Parameters
+    ----------
+    seqs : dict
+        The dictionary of kmer sequences and their indexes
 
     Returns:
          Aho-Corasick Automaton with kmers loaded
+    Notes
+    -----
+    Please refer to the `pyahocorasick <https://github.com/WojciechMula/pyahocorasick/>`_ project, specifically the method `add_word <https://pyahocorasick.readthedocs.io/en/latest/#add-word-key-value-boolean>`_ for this method.
     """
     A = Automaton()
     for seq_id in seqs:
@@ -79,12 +97,27 @@ def processSeq(fasta_file, out_file, seqids, num_kmers, klen, aho):
     output file for further processing.  This file contains the sequence id, kmer
     index, kmer start and end indexes, and if the kmer is a reverse compliment.
     Note this method is added to the Ray instance for distributed computational power.
-    :param fasta_file: String - the file path to the fasta formatted file.
-    :param out_file: String - the path to the output kmer file - temporary processing file
-    :param seqids: dictionary - the sequence ids as keys
-    :param num_kmers: int - number of kmers to process
-    :param klen: int - length of the kmers
-    :param aho: Automaton object - the aho-corsick object of the filtered kmer
+
+    Parameters
+    ----------
+    fasta_file : str
+        The file path to the fasta formatted file
+    out_file : str
+        The file path to the temporary kmer processing output file
+    seqids : dict
+        The dictionary of sequence ids and sequences
+    num_kmers : int
+        The number of kmers to process
+    klen : int
+        The length of the kmers
+    aho : Automaton object
+        The Aho-Corasick object of the filtered kmers (see :meth:`init_automaton_dict`)
+
+    Notes
+    -----
+    Refer to https://www.ray.io for more information about the Ray instances used in this module.
+
+    Also refer to the `pyahocorasick <https://github.com/WojciechMula/pyahocorasick/>`_ project, specifically the `iter <https://pyahocorasick.readthedocs.io/en/latest/#iter-string-start-end-ignore-white-space-false>`_ method.
     """
     #set for reveres complement kmers
     revcomp_kmers = set()
@@ -134,13 +167,29 @@ def SeqSearchController(seqKmers, fasta_file,out_dir,prefix,n_threads=1):
     """
     This method takes in the list of all possible kmers for the sequences
     provided and writes them to a temporary processing file for downstream
-    searches
-    :param seqKmers: dictionary - the index as keys and sequences of the kmers
-    :param fasta_file: String - the file path to the fasta sequence file
-    :param out_dir: String - the file path to the output file
-    :param prefix: String - the prefix for the output files
-    :param n_threads: int - number of threads to be used in this process, default is 1
-    :return: list - a list of Strings for the paths to the temporary processing file
+    searches.  This method employs the use of Ray for processing.
+
+    Parameters
+    ----------
+    seqKmers : dict
+        A dictionary with the index as keys and kmer sequences as values
+    fasta_file : str
+        The file path to the fasta file containing the sequence
+    out_dir : str
+        The filepath to the temporary output file for the kmers
+    prefix : str
+        The prefix for the output file name
+    n_threads : int
+        The number of threads to be used in the Ray process, default is 1
+
+    Returns
+    -------
+    int
+        A list of strings for the paths to the temporary processing files
+    
+    Notes
+    -----
+    Refer to https://www.ray.io for more information about the Ray instances used in this module.
     """
     num_kmers = len(seqKmers)
     if num_kmers == 0:

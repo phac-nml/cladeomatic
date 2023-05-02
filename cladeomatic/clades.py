@@ -550,7 +550,7 @@ class clade_worker:
         This method reads the distance matrix file previously created and
         sets the node's closest distance, the closest sample distances, the average
         distances within the clade, total comparisons, and total distance
-        for each node in the clade data dictionary
+        for each node in the clade data dictionary.
         """
         fh = open(self.distance_matrix_file,'r')
         header = next(fh).rstrip().split("\t")
@@ -956,8 +956,8 @@ class clade_worker:
                 #find the nonmembers that are unique to the group data membership
                 nonmembers = node_members - clust_members
                 count_nonmembers = len(nonmembers)
-                #if the count of the non members is smaller than the best count
-                #set the variables to find the group that has least difference
+                #if the count of the non-members is smaller than the best count
+                #set the variables to find the group that has the least difference
                 #between sets
                 if count_nonmembers < best_node_nonmembers:
                     best_node_id = node_id
