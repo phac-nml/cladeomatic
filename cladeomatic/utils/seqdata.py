@@ -11,13 +11,18 @@ NT_SUB = str.maketrans('acgtrymkswhbvdnxACGTRYMKSWHBVDNX',
 
 def revcomp(s):
     """
-    Reverse complement nucleotide sequence
+    Helper method to create the reverse complement nucleotide sequence
+    for the sequence passed.
 
-    Args:
-        s (str): nucleotide sequence
+    Parameters
+    ----------
+    s : str
+        The nucleotide sequence to parse
 
-    Returns:
-        str: reverse complement of `s` nucleotide sequence
+    Returns
+    -------
+    str
+        The reverse complement of the passed nucleotide sequence
     """
     return s.translate(NT_SUB)[::-1]
 
@@ -25,9 +30,17 @@ def revcomp(s):
 def read_fasta_dict(fasta_file):
     """
     Reads the fasta file from the passed file path and formats
-    the input to a dictionary of sequences
-    :param fasta_file: [str] Path to fasta file to read
-    :return: [dict] of sequences indexed by sequence id
+    the input to a dictionary of sequences.
+
+    Parameters
+    ----------
+    fasta_file : str
+        The path to fasta file to read
+
+    Returns
+    -------
+    dict
+        A dictionary of sequences indexed by sequence id
     """
     seqs = dict()
     with open(fasta_file, "r") as handle:
@@ -40,10 +53,17 @@ def read_fasta_dict(fasta_file):
 def gb_to_fasta_dict(gbk_file):
     """
     Reads a GenBank formatted sequence file and creates a
-    dictionary of sequences with the sequence id as keys
-    :param gbk_file: String - the string path to a GenBank formatted
-    sequence file
-    :return: dictionary - a dictionary of sequences indexed by sequence id
+    dictionary of sequences with the sequence id as keys.
+
+    Parameters
+    ----------
+    gbk_file - str
+        The string path to a GenBank formatted sequence file
+
+    Returns
+    -------
+    dict
+        A dictionary of sequences indexed by sequence id
     """
     seqs = dict()
     with open(gbk_file, "r") as handle:
@@ -56,9 +76,15 @@ def parse_reference_gbk(gbk_file):
     """
     Method to parse the GenBank reference file, clean the strings, and
     return the reference features of interest.
-    :param gbk_file: String - path to the reference genbank
-    format file with sequence annotations
-    :return: dictionary - a dictionary of all of the reference features
+
+    Parameters
+    ----------
+    gbk_file : str
+        The file path to the reference genbank format file with sequence annotations
+    Returns
+    -------
+    dict
+        A dictionary of all the reference features
     """
     sequences = {}
     with open(gbk_file) as handle:
@@ -125,9 +151,17 @@ def parse_reference_gbk(gbk_file):
 @deprecated()
 def calc_md5(string):
     """
-    Method to encode the MD5 hash for the input string
-    :param string: String to compute MD5
-    :return: hash - the md5 hash
+    Method to encode the MD5 hash for the input string.
+
+    Parameters
+    ----------
+    string : srt
+    The string to compute the MD5 hash
+
+    Returns
+    -------
+    hash
+        The md5 hash generated
     """
     seq = str(string).encode()
     md5 = hashlib.md5()
@@ -138,9 +172,17 @@ def calc_md5(string):
 def generate_non_gap_position_lookup(seq):
     """
     Creates a list of positions which correspond to the position
-    of that base in a gapless sequence
-    :param seq: string - the sequence to process
-    :return: list - an int list of the positions  of the gaps
+    of that base in a gapless sequence.
+
+    Parameters
+    ----------
+    seq : str
+        The sequence to process for gaps
+
+    Returns
+    -------
+    list
+        An int list of the positions of the gaps
     """
     length = len(seq)
     num_gaps = 0
@@ -158,9 +200,16 @@ def create_aln_pos_from_unalign_pos_lookup(aln_seq):
     """
     This method creates a list of integers for the positions
     of the bases in the unaligned sequence derived from the
-    aligned sequence passed to the method
-    :param aln_seq: String - the alignment sequence
-    :return: list - a list of integers for the positions found
+    aligned sequence passed to the method.
+
+    Parameters
+    ----------
+    aln_seq : str
+        The alignment sequence to process
+    Returns
+    -------
+    list
+        A list of integers for the positions found
     """
     unalign_seq = aln_seq.replace('-', '')
     aln_len = len(aln_seq)
@@ -178,11 +227,17 @@ def create_aln_pos_from_unalign_pos_lookup(aln_seq):
 def get_variants(vcf_file):
     """
     This method reads the incoming VCF file and returns
-    a dictionary of the sample variant bases and their locations
-    both in the genome and the tree
-    :param vcf_file: String - path to the VCF file
-    :return: dictionary - a dictionary of the sample variants with the
-    node id as key
+    a dictionary of the sample variant bases and their locations.
+
+    Parameters
+    ----------
+    vcf_file : str
+        The file path to the VCF file for variant discovery
+
+    Returns
+    -------
+    dict
+        A dictionary of the sample variants with the node id as key
     """
     #read the file
     vcf = vcfReader(vcf_file)
@@ -225,10 +280,17 @@ def create_pseudoseqs_from_vcf(ref_id,ref_seq,vcf_file, outfile):
     """
     This method creates the pseudo full sequences of the variants found
     in the VCF file.
-    :param ref_id: String - the reference sequence identifier
-    :param ref_seq: String - the reference sequence to alter
-    :param vcf_file: String - the path to the VCF file
-    :param outfile: String - the path to the pseudo variant outfile
+
+    Parameters
+    ----------
+    ref_id : str
+        The reference sequence identifier
+    ref_seq : str
+        The reference sequence to alter
+    vcf_file : str
+        The path to the VCF file
+    outfile : str
+        The path to the pseudo variant outfile
     """
     #retrieve the variant bases, genome and tree locations
     sample_variants = get_variants(vcf_file)
@@ -261,10 +323,17 @@ def calc_homopolymers(seq):
     """
     The method calculates the longest homopolymer (the sequence
     of consecutive identical bases) in the sequence or sequence
-    fragment passed
-    :param seq: String - the sequences or sequence fragment to find the
-    longest homopolymer
-    :return: int - the longest homopolymer length
+    fragment passed.
+
+    Parameters
+    ----------
+    seq : str
+        The sequences or sequence fragment to find the longest homopolymer
+
+    Returns
+    -------
+    int
+        The longest homopolymer length
     """
     longest = 0
     for b in ['A', 'T', 'C', 'C']:

@@ -8,15 +8,27 @@ from deprecated import deprecated
 @deprecated()
 def plot_bar(x,y):
     """
-    A method to plot a bar chart with the x and y objects passed
-    :param x: obj - list or a dictionary for the x axis objects
-    :param y: obj - list or a dictionary for the y axis objects
-    :return: Figure - return the figure produced
+    A method to plot a bar chart with the x and y objects passed.
+
+    Parameters
+    ----------
+    x : obj
+        The list or a dictionary for the x-axis objects
+    y : obj
+        The list or a dictionary for the y-axis objects
+
+    Returns
+    -------
+    Figure
+        The plotly figure produced
+
+    Notes
+    -----
+    Please refer to https://plotly.com/python/ for more documentation
     """
     if len(y) == 0:
         return None
-    #create the pandas data frome from a zip of the x and y objects
-    #cast to a list
+    #create the pandas data from a zip of the x and y objects, cast to a list
     df = pd.DataFrame(list(zip(x,y)),columns=['x','y'])
     fig = px.bar(df, x="x",
                  y='y',
@@ -29,8 +41,13 @@ def create_dist_histo(data,outfile):
     """
     A method to create a histogram from the data dictionary passed.
     This method also writes the histogram to a file.
-    :param data: dictionary - the data to be plotted
-    :param outfile: String - the output figure file path
+
+    Parameters
+    ----------
+    data : dict
+        The data to be plotted
+    outfile : str
+        The output figure file path
     """
     fig = px.bar(x=data.keys(),y=data.values())
     fig.update_yaxes(title="Frequency")

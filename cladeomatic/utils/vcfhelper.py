@@ -4,7 +4,7 @@ import cladeomatic.constants as CONSTANT
 class vcfReader:
     """
     The vcfReader class is meant to be a helper class to read and
-    process VCF files
+    process VCF files.
     """
     #the list of required headers for a VCF file
     required_fields = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']
@@ -16,8 +16,12 @@ class vcfReader:
 
     def next_row(self):
         """
-        A method to return the next row of the VCF file
-        :return: the file reader object - the next row of the file
+        A method to return the next row of the VCF file.
+
+        Returns
+        -------
+        vcfReader object
+            The next row of the file
         """
         try:
             return next(self.reader)
@@ -26,9 +30,16 @@ class vcfReader:
 
     def check_file(self, file):
         """
-        A method to verify that a file exists and is not empty
-        :param file: String - the file path
-        :return: Boolean - True if the file exists and is not empty
+        A helper method to verify that a file exists and is not empty.
+
+        Parameters
+        ----------
+        file : str
+            The path to the file
+        Returns
+        -------
+        bool
+            True if the file both exists and is not empty
         """
         if not os.path.isfile(file):
             return False
@@ -38,10 +49,14 @@ class vcfReader:
 
     def __init__(self,file):
         """
-        The vcfReader class instantiator.  Also used to run the
+        The vcfReader class instantiation.  Also used to run the
         processing methods like file validation, reading the file,
-        cleaning the file Strings, and creating the header and sample lists
-        :param file: String - the file path
+        cleaning the file Strings, and creating the header and sample lists.
+
+        Parameters
+        ----------
+        file : str
+            The path to the VCF file
         """
         #return None if the file validation fails
         if not self.check_file(file):
@@ -64,10 +79,12 @@ class vcfReader:
 
     def process_row(self):
         """
-        A method to process the output of a row of the VCF file
-        :return: dictionary - a dictionary of the VCF file data with
-        the headers as keys for the sample data.  Return None if there
-        is no next row.
+        A method to process the output of a row for the VCF file.
+
+        Returns
+        -------
+        dict
+            A dictionary of the VCF file data with the headers as keys for the sample data.  Return 'None' if there is no next row in the file.
         """
         self.row = self.next_row()
         if self.row is None:
