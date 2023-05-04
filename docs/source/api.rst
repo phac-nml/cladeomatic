@@ -23,7 +23,6 @@ genotype
 
 .. automodule:: cladeomatic.genotype
     :members:
-    :special-members: call_genotypes
 
 benchmark
 ---------
@@ -62,7 +61,6 @@ snps
 
 .. automodule:: cladeomatic.snps
     :members:
-    :special-members: snp_search
 
 visualize
 ---------
@@ -93,7 +91,6 @@ utils.kmerSearch
 
 .. automodule:: cladeomatic.utils.kmerSearch
     :members:
-    :special-members: processSeq
 
 utils.phylo_tree
 ----------------
