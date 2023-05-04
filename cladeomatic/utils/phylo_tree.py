@@ -29,7 +29,8 @@ def tree_to_distance_matrix(tree_file,out_file):
 def get_pairwise_distances_from_matrix(matrix_file):
     """
     This method gets the pairwise distances from the passed matrix file
-    and adds them to a list
+    and adds them to a list.
+
     Parameters
     ----------
     matrix_file : str
@@ -134,7 +135,6 @@ def prune_tree(ete_tree_obj,valid_nodes):
 def parse_tree(tree_file,logging,ete_format=0,set_root=False,resolve_polytomy=True,ladderize=True,method='midpoint',outgroup=''):
     """
     This method parses the newick formatted tree and transforms it to an ETE3 tree object.
-
 
     Parameters
     ----------

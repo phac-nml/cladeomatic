@@ -9,11 +9,16 @@ def write_clade_snp_report(clade_data, out_file):
 
 def print_params(params,outfile):
     """
-    A method to create the parameter file (list of all the command line
-    parameters and their user input values if supplied)
-    :param params: params - the parameter object
-    :param outfile: String - the output file path
-    :return:
+    A method to create the parameter file.  This is the list of all the command line
+    parameters and their user input values if supplied.  Please refer to the sample file
+    examples/small_test/cladeomatic/cladeomatic-params.log for more information.
+
+    Parameters
+    -----------
+    params : argparse.Namespace object
+        The Namespace object that holds the parameters and their values
+    outfile : str
+        The file path for the parameters output file
     """
     fh = open(outfile,'w')
     p = vars(params)
@@ -29,9 +34,14 @@ def write_kmers(kmers, out_file):
     """
     A method to create and write a kmer file indicating the
     index of the kmer, the kmer sequence, the snp position and base value,
-    and the alignment start and end
-    :param kmers: dictionary - a dictionary of kmers
-    :param out_file: String - the output file path
+    and the alignment start and end.
+
+    Parameters
+    ----------
+    kmers : dict
+        The dictionary of kmers to be written
+    out_file : str
+        The path to the output file
     """
     header = "index\tkseq\ttarget_pos\ttarget_base\taln_start\taln_end\n"
     fh = open(out_file, 'w')
@@ -50,10 +60,16 @@ def write_kmers(kmers, out_file):
 
 def write_node_report(clade_data, outfile):
     """
-    Writes the Node information data to a tsv file
-    :param clade_data: dict Node information structure
-    :param outfile: string - the output file path
-    :return:
+    Writes the clades data produced by the :class:`cladeomatic.clades.clade_worker` class
+    to a TSV file.  Please refer to the sample file
+    examples/small_test/cladeomatic/cladeomatic-clades.info.txt for more information.
+
+    Parameters
+    ----------
+    clade_data : dict
+        The clade data for writing to the file
+    outfile : str
+        The output file path
     """
     fh = open(outfile, 'w')
 
@@ -96,12 +112,18 @@ def write_node_report(clade_data, outfile):
     return
 
 def write_snp_report(snp_data, outfile):
-    '''
-    Accepts snp_data dict data structure and writes snp details
-    :param snp_data: dict() {[chrom_id] : {[position]: {[base]: :dict()}}}
-    :param outfile: string - the output file path
-    :return:
-    '''
+    """
+    Accepts snp_data data dictionary structure and writes the snp details to a file.
+    Please refer to the sample file
+    examples/small_test/cladeomatic/cladeomatic-snps.info.txt for more information.
+
+    Parameters
+    ----------
+    snp_data : dict
+        A dictionary for the snp data in the format {[chrom_id] : {[position]: {[base]: :dict()}}}
+    outfile : str
+        The file output path
+    """
     fh = open(outfile, 'w')
     fh.write(
         "chrom\tpos\tbase\tclade_id\tis_canonical\tnum_positive_clade_members\tnum_total_clade_members\tis_ref\toddsr\tp_value\n")
@@ -121,12 +143,19 @@ def write_snp_report(snp_data, outfile):
     return
 
 def write_genotypes(genotypes, outfile,header="sample_id\tgenotype\n"):
-    '''
-    Accepts a list of sample genotype heirarchies and writes them to a file
-    :param genotypes: dict of leaf names with heirarchal list of node id's to represent tree structure
-    :param outfile: string - the output file path
-    :return:
-    '''
+    """
+    Accepts a list of sample genotype hierarchies and writes them to a file.
+    Please refer to the sample files
+    examples/small_test/cladeomatic/cladeomatic-genotypes.distance.txt and
+    examples/small_test/cladeomatic/cladeomatic-genotypes.selected.txt for more information.
+
+    Parameters
+    ----------
+    :param genotypes : dict
+        The dictionary of genotypes for writing
+    outfile : str
+        The output file path
+    """
     fh = open(outfile, 'w')
     fh.write(header)
     for sample_id in genotypes:
@@ -137,10 +166,18 @@ def write_genotypes(genotypes, outfile,header="sample_id\tgenotype\n"):
 
 def write_scheme(header,scheme,outfile):
     """
-    A method to write the scheme to a file
-    :param header: String - the header string
-    :param scheme: dictionary - a dictionary of the scheme data
-    :param outfile: String the output file path
+    A method to write either a kmer or snp scheme to a file.  Please refer to the sample files
+    examples/small_test/cladeomatic/cladeomatic-kmer.scheme.txt and
+    examples/small_test/cladeomatic/cladeomatic-snp.scheme.txt for more information.
+
+    Parameters
+    ----------
+    header : str
+        The string representing the header text
+    scheme : dict
+        A dictionary of the kmer or snp scheme data to write out
+    outfile : str
+        The output file path
     """
     fh = open(outfile, 'w')
     fh.write("{}\n".format("\t".join(header)))

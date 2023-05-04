@@ -18,7 +18,11 @@ create
     :members:
     :special-members: CustomFormatter
 
+genotype
+--------
 
+.. automodule:: cladeomatic.genotype
+    :members:
 
 benchmark
 ---------
@@ -74,7 +78,6 @@ utils.__init__
 --------------
 .. automodule:: cladeomatic.utils.__init__
     :members:
-
 
 utils.jellyfish
 ---------------

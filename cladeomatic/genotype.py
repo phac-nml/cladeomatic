@@ -70,7 +70,7 @@ def get_snp_profiles(valid_positions, vcf_file):
     Returns
     -------
     dict
-        of snp_data data structure
+        The dictionary of the snp data
     """
     vcf = vcfReader(vcf_file)
     #read the first row of the VCF file
@@ -552,7 +552,7 @@ def is_valid_file(filename):
 
 def run():
     """
-    The main method to read the command line arguments and create the genotype call file.
+    The main method to read the command line arguments and creates the genotype call file.
     This method reads the scheme, variant, sample and genotype metadata files, and constructs
     various processing data dictionaries to ultimately call the genotypes and provide a measure of
     quality control of those calls for the samples passed.

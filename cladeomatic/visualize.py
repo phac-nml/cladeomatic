@@ -4,9 +4,11 @@ import matplotlib
 import networkx as nx
 import pandas as pd
 import seaborn as sns
+from deprecated import deprecated
 
-
+@deprecated
 def create_clade_heirarchy(genotypes,delim="."):
+
     h = {}
     for sample_id in genotypes:
         genotype = genotypes[sample_id].split(delim)
@@ -16,7 +18,7 @@ def create_clade_heirarchy(genotypes,delim="."):
             h[genotype[i]] = genotype[i-1]
 
     return h
-
+@deprecated
 def create_graph_json(h,outfile):
     g = nx.DiGraph()
 
