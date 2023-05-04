@@ -74,11 +74,6 @@ writers
 .. automodule:: cladeomatic.writers
     :members:
 
-utils.__init__
---------------
-.. automodule:: cladeomatic.utils.__init__
-    :members:
-
 
 utils.jellyfish
 ---------------
