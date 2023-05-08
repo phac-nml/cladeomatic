@@ -5,7 +5,7 @@
 import os
 import sys
 #Go up one level to find the project
-sys.path.insert(0, os.path.abspath('../..'))
+#sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
