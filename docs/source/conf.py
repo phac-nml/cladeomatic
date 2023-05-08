@@ -6,7 +6,7 @@ import os
 import sys
 #Go up one level to find the project
 #sys.path.insert(0, os.path.abspath('../..'))
-sys.path.insert(0, os.path.join(os.path.dirname((os.path.abspath('../..'))),'cladeomatic' 'utils',))
+sys.path.insert(0, os.path.join(os.path.dirname((os.path.abspath('../..'))),'cladeomatic', 'utils'))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
