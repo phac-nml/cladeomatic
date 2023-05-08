@@ -24,13 +24,13 @@ sphinx:
 #    - pdf
 
 # Optionally declare the Python requirements required to build your docs
-python:
-  install:
+#python:
+#  install:
 #    - requirements: docs/requirements.txt
 #    - method: pip
 #      path: .
 #      extra_requirements:
 #        - docs
-    - method: pip
-      path: numpy>=1.23.0
-  system_packages: true
+#    - method: pip
+#      path: numpy>=1.23.0
+#  system_packages: true
