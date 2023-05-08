@@ -71,7 +71,9 @@ html_css_files = [
 #This is a pretty epic kludge, version 2 will look for better virtual environment support.
 #
 #UPDATE: no longer needed, but keeping for future reference and bug checking
-# added a requirements file, added a read the docs yaml- EAF May 8/23
+# added a requirements file, added a .readthedocs.yaml configuration file
+# ensure that in Advanced admin tab has both 'Use system packages' and 'Install Project'
+# checked.- EAF May 8/23
 #import mock
 
 #MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
