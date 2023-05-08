@@ -70,11 +70,11 @@ html_css_files = [
 #
 #This is a pretty epic kludge, version 2 will look for better virtual environment support.
 #aka no I'm not happy but it works -EAF
-import mock
+#import mock
 
-MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
-                'networkx', 'Bio.Seq', 'seaborn', 'sklearn', 'sklearn.metrics', 'scipy.cluster',
-                'ahocorasick', 'dendropy', 'plotly', 'scipy.signal', 'ete3', 'plotly.express',
-                'scipy.spatial', 'numpy']
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
+#MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
+#                'networkx', 'Bio.Seq', 'seaborn', 'sklearn', 'sklearn.metrics', 'scipy.cluster',
+#                'ahocorasick', 'dendropy', 'plotly', 'scipy.signal', 'ete3', 'plotly.express',
+#                'scipy.spatial', 'numpy']
+#for mod_name in MOCK_MODULES:
+#    sys.modules[mod_name] = mock.Mock()
