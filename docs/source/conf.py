@@ -69,7 +69,9 @@ html_css_files = [
 #the names of all the external classes you use.
 #
 #This is a pretty epic kludge, version 2 will look for better virtual environment support.
-#aka no I'm not happy but it works -EAF
+#
+#UPDATE: no longer needed, but keeping for future reference and bug checking
+# added a requirements file, added a read the docs yaml- EAF May 8/23
 #import mock
 
 #MOCK_MODULES = ['pandas', 'scipy', 'ray', 'matplotlib', 'Bio', 'deprecate', 'deprecated', 'psutil', 'scipy.stats',
