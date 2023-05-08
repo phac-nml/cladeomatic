@@ -5,13 +5,7 @@
 import os
 import sys
 #Go up one level to find the project
-#sys.path.insert(0, os.path.abspath('../..'))
-sys.path.append(os.path.abspath('../..'))
-sys.path.append(os.path.abspath('..'))
-#sys.path.insert(0, os.path.join(os.path.dirname((os.path.abspath('../..'))),'cladeomatic','latest'))
-#print("PathEAF", os.path.join(os.path.dirname((os.path.abspath('../..'))),'cladeomatic','latest'))
-#print("find class", os.path.dirname(os.path.realpath('create.py')))
-#print("working dir", os.getcwd())
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
