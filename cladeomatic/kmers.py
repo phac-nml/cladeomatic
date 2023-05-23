@@ -873,12 +873,13 @@ class kmer_worker:
                     if b in out_bases:
                         iupac_key.append(b)
                 iupac_key = ''.join(iupac_key)
-                consensus[pos] = IUPAC_LOOK_UP[iupac_key]
-                ref_kmer = consensus[kStart:kEnd]
-                kmers[pos][base]['positive'] = alt_kmer
-                kmers[pos][base]['negative'] = ''.join(ref_kmer)
-                kmers[pos][base]['start'] = kStart
-                kmers[pos][base]['end'] = kEnd
+                if len(iupac_key) > 0:
+                    consensus[pos] = IUPAC_LOOK_UP[iupac_key]
+                    ref_kmer = consensus[kStart:kEnd]
+                    kmers[pos][base]['positive'] = alt_kmer
+                    kmers[pos][base]['negative'] = ''.join(ref_kmer)
+                    kmers[pos][base]['start'] = kStart
+                    kmers[pos][base]['end'] = kEnd
 
             consensus[pos] = cons_base
 
