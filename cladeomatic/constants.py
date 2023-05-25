@@ -6,6 +6,14 @@ performs in the creation of schemes and data analysis.
 #format for the log entries
 LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 
+CONFIDENCE = ['strong','moderate','weak']
+
+QC_STATUS = ['PASS','FAIL','WARN']
+
+#the minimum file size to define a file as empty or not
+MIN_FILE_SIZE = 32
+
+
 #the scheme header row string
 SCHEME_HEADER = [
     'key',
@@ -120,14 +128,6 @@ NODE_INFO_HEADER = [
 ]
 
 
-CONFIDENCE = ['strong','moderate','weak']
-
-QC_STATUS = ['PASS','FAIL','WARN']
-
-#the minimum file size to define a file as empty or not
-MIN_FILE_SIZE = 32
-
-
 
 IUPAC_LOOK_UP = {
     'A': 'A',
@@ -157,6 +157,7 @@ IUPAC_LOOK_UP = {
     'GAT': 'D',
     'ATG': 'D',
     'ACT': 'H',
+    'ATC': 'H',
     'CTA': 'H',
     'TCA': 'H',
     'TAC': 'H',
