@@ -2,11 +2,11 @@
 import os
 from distutils.core import setup
 from setuptools import find_packages
-from cladeomatic.version import __version__
+from src.version import __version__
 author = 'James Robertson'
 
 classifiers = """
-Development Status :: 3 - Alpha
+Development Status :: 3 - Beta
 Environment :: Console
 License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
 Intended Audience :: Science/Research
@@ -27,50 +27,40 @@ def read(fname):
 exec(open('cladeomatic/version.py').read())
 
 setup(
-    name='cladeomatic',
+    name='profile_dists',
     include_package_data=True,
     version=__version__,
-    python_requires='>=3.9.0,<4',
+    python_requires='>=3.8.2,<4',
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     packages=find_packages(exclude=['tests']),
-    url='https://github.com/phac-nml/cladeomaticc',
+    url='https://github.com/phac-nml/profile_dists',
     license='GPLv3',
     author='James Robertson',
     author_email='james.robertson@phac-aspc.gc.ca',
     description=(
-        'Clade-O-Matic: Automatic recognition of population structures based on canonical SNPs'),
-    keywords='Genotyping, population structure, kmer',
+        'Profile Dists: Rapid calcualtion of allele profile distances and distance base querying'),
+    keywords='cgMLST, wgMLST, outbreak, surveillance, clustering, distance matrix',
     classifiers=classifiers,
-    package_dir={'cladeomatic': 'cladeomatic'},
+    package_dir={'profile_dists': 'src'},
     package_data={
-        "": ["*.txt", "*.fasta","*.html","*.gb"],
+        "": ["*.txt"],
     },
 
     install_requires=[
-        'numpy>=1.23.0',
-        'pandas>=2.0.1',
-        'biopython>=1.81',
+        'pyarrow==12.0.0',
+        'fastparquet==2023.4.0',
+        'numba==0.57.1',
+        'numpy==1.24.4',
+        'tables==3.8.0',
         'six>=1.16.0',
-        'matplotlib>=3.7.1',
-        'statistics>=1.0.3.5',
-        'plotly>=5.14.1',
-        'ete3==3.1.2',
-        'jellyfish',
-        'DendroPy==4.5.2',
-        'ray>=2.3.1',
-        'deprecated>=1.2.13',
-        'psutil==5.9.1',
-        'scikit-learn>=1.1.1',
-        'scipy>=1.10.1',
-        'pyahocorasick>=1.4.4',
-        'PyQt5'
+        'pandas==2.0.2 ',
 
     ],
 
     entry_points={
         'console_scripts': [
-            'cladeomatic=cladeomatic.main:main',
+            'profile_dists=src.dist:main',
         ],
     },
 )
